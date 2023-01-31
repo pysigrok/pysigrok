@@ -8,6 +8,9 @@ authors = [{name = "Scott Shawcroft", email = "scott@tannewt.org"}]
 license = {file = "LICENSE"}
 classifiers = ["License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)"]
 dynamic = ["version", "description"]
+dependencies = [
+    "click < 9",
+]
 
 [project.urls]
 Home = "https://github.com/pysigrok/pysigrok"
