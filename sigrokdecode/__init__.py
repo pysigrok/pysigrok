@@ -21,6 +21,12 @@ OUTPUT_BINARY = OutputType.SRD_OUTPUT_BINARY
 OUTPUT_LOGIC = OutputType.SRD_OUTPUT_LOGIC
 OUTPUT_META = OutputType.SRD_OUTPUT_META
 
+def SR_KHZ(num):
+    return num * 1000
+
+def SR_MHZ(num):
+    return SR_KHZ(num) * 1000
+
 class Decoder:
     # __init__() won't get called by subclasses
 
