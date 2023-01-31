@@ -1,0 +1,20 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "pysigrok"
+authors = [{name = "Scott Shawcroft", email = "scott@tannewt.org"}]
+license = {file = "LICENSE"}
+classifiers = ["License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)"]
+dynamic = ["version", "description"]
+
+[project.urls]
+Home = "https://github.com/pysigrok/pysigrok"
+
+[tool.flit.module]
+name = "sigrokdecode"
+
+[project.scripts]
+pysigrok-cli = "sigrokdecode.cli:main"
+pysigrok-runtc = "sigrokdecode.runtc:main"
