@@ -6,7 +6,7 @@ if sys.version_info < (3, 10):
 else:
     from importlib.metadata import entry_points
 
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 
 class OutputType(Enum):
     SRD_OUTPUT_ANN = 0
@@ -68,10 +68,12 @@ class Decoder:
         if not hasattr(self, "decoder_channel_to_data_channel"):
             self.decoder_channel_to_data_channel = {}
             self.one_to_one = True
-        optional = tuple()
-        if hasattr(self, "optional_channels"):
-            optional = self.optional_channels
-        for i, c in enumerate(self.channels + optional):
+
+        if not hasattr(self, "optional_channels"):
+            self.optional_channels = tuple()
+        if not hasattr(self, "channels"):
+            self.channels = tuple()
+        for i, c in enumerate(self.channels + self.optional_channels):
             if c["id"] == channelname:
                 self.decoder_channel_to_data_channel[i] = channelnum
                 self.one_to_one = self.one_to_one and i == channelnum
