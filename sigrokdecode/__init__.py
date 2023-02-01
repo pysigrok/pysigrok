@@ -6,7 +6,7 @@ if sys.version_info < (3, 10):
 else:
     from importlib.metadata import entry_points
 
-__version__ = "0.0.5"
+__version__ = "0.0.6"
 
 class OutputType(Enum):
     SRD_OUTPUT_ANN = 0

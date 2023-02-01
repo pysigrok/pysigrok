@@ -76,7 +76,8 @@ def main(protocol_decoder, pin_mapping, channel_option, channel_initial_value, i
         decoder.add_callback(output_type, functools.partial(output_fun, decoder, output_filter, f))
         decoder.start()
         decoder.reset()
-        decoder.metadata(SRD_CONF_SAMPLERATE, data.samplerate)
+        if data.samplerate > 0:
+            decoder.metadata(SRD_CONF_SAMPLERATE, data.samplerate)
         try:
             decoder.decode()
         except EOFError:

@@ -10,6 +10,7 @@ TYPECODE = {
 }
 
 UNITS = {
+    "kHz": 1000,
     "KHz": 1000,
     "MHz": 1000000,
 }
@@ -29,7 +30,7 @@ class SrZip:
         #     for o in self.metadata.options(s):
         #         print(" ", o, self.metadata.get(s, o))
 
-        samplerate = self.metadata.get("device 1", "samplerate")
+        samplerate = self.metadata.get("device 1", "samplerate", fallback="0")
         # print(samplerate)
         if " " in samplerate:
             num, units = samplerate.split(" ")
