@@ -1,5 +1,18 @@
+import array
 import zipfile
 import configparser
+import struct
+
+TYPECODE = {
+    1: "B",
+    2: "H",
+    4: "L"
+}
+
+UNITS = {
+    "KHz": 1000,
+    "MHz": 1000000,
+}
 
 class SrZip:
     def __init__(self, filename, initial_state=None):
@@ -16,14 +29,24 @@ class SrZip:
         #     for o in self.metadata.options(s):
         #         print(" ", o, self.metadata.get(s, o))
 
+        samplerate = self.metadata.get("device 1", "samplerate")
+        # print(samplerate)
+        if " " in samplerate:
+            num, units = samplerate.split(" ")
+            self.samplerate = float(num) * UNITS[units]
+        else:
+            self.samplerate = int(samplerate)
+
         self.last_sample = 0
         for channel in initial_state:
             self.last_sample |= initial_state[channel] << channel
         self.unitsize = int(self.metadata.get("device 1", "unitsize"))
-        assert(self.unitsize == 1)
+        self.typecode = TYPECODE[self.unitsize]
 
         if self.version == 1:
             self.data = self.zip.read("logic-1")
+            if self.unitsize > 1:
+                self.data = array.array(self.typecode, self.data)
         else:
             self.data = None
             self._file_start = -1
@@ -35,23 +58,31 @@ class SrZip:
             self.matched = [True] * len(conds)
             self.samplenum += 1
             if self.version == 1:
-                if self.samplenum * self.unitsize >= len(self.data):
+                if self.samplenum >= len(self.data):
                     raise EOFError()
                 sample = self.data[self.samplenum]
             elif self.version == 2:
                 file_samplenum = self.samplenum - self._file_start
-                if self.data is None or file_samplenum * self.unitsize >= len(self.data):
+                if self.data is None or file_samplenum >= len(self.data):
                     self._file_start = self.samplenum
                     try:
-                        self.data = self.data = self.zip.read(f"logic-1-{self._file_index:d}")
+                        self.data = self.zip.read(f"logic-1-{self._file_index:d}")
                     except KeyError:
                         raise EOFError()
+
+                    if self.unitsize > 1:
+                        self.data = array.array(self.typecode, self.data)
+
                     file_samplenum = 0
                     self._file_index += 1
                 sample = self.data[file_samplenum]
 
             for i, cond in enumerate(conds):
                 for channel in cond:
+                    if channel == "skip":
+                        cond[channel] -= 1
+                        self.matched[i] = cond[channel] == 0
+                        continue
                     state = cond[channel]
                     mask = 1 << channel
                     last_value = self.last_sample & mask

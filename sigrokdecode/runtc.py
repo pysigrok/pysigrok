@@ -11,7 +11,7 @@ def output_python(decoder, outfilter, outfile, startsample, endsample, data):
 def output_annotation(decoder, outfilter, outfile, startsample, endsample, data):
     annotation = decoder.annotations[data[0]]
     if outfilter is None or annotation[0] == outfilter:
-        data = " ".join([repr(x) for x in data[1]]).replace("\'", "\"")
+        data = " ".join(["\"" + str(x) + "\"" for x in data[1]])
         outfile.write(f"{startsample}-{endsample} {decoder.id}: {annotation[0]}: {data}\n".encode("utf-8"))
 
 def output_binary(decoder, outfilter, outfile, startsample, endsample, data):
@@ -22,6 +22,7 @@ def output_binary(decoder, outfilter, outfile, startsample, endsample, data):
 
 OUTPUT_TYPES = {
     "python": (OUTPUT_PYTHON, output_python),
+    "exception": (OUTPUT_PYTHON, output_python),
     "annotation": (OUTPUT_ANN, output_annotation),
     "binary": (OUTPUT_BINARY, output_binary)
 }
@@ -55,6 +56,11 @@ def main(protocol_decoder, pin_mapping, channel_option, channel_initial_value, i
     if hasattr(decoder_class, "options"):
         for o in decoder_class.options:
             decoder.options[o["id"]] = o["default"]
+    for option in channel_option:
+        k, v = option.split("=")
+        if isinstance(decoder.options[k], int):
+            v = int(v)
+        decoder.options[k] = v
     decoder.input = data
     for decoder_id in parsed_mapping:
         channelnum = parsed_mapping[decoder_id]
@@ -70,8 +76,8 @@ def main(protocol_decoder, pin_mapping, channel_option, channel_initial_value, i
         decoder.add_callback(output_type, functools.partial(output_fun, decoder, output_filter, f))
         decoder.start()
         decoder.reset()
+        decoder.metadata(SRD_CONF_SAMPLERATE, data.samplerate)
         try:
             decoder.decode()
         except EOFError:
             pass
-

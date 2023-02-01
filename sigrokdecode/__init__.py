@@ -6,7 +6,7 @@ if sys.version_info < (3, 10):
 else:
     from importlib.metadata import entry_points
 
-__version__ = "0.0.4"
+__version__ = "0.0.5"
 
 class OutputType(Enum):
     SRD_OUTPUT_ANN = 0
@@ -20,6 +20,8 @@ OUTPUT_PYTHON = OutputType.SRD_OUTPUT_PYTHON
 OUTPUT_BINARY = OutputType.SRD_OUTPUT_BINARY
 OUTPUT_LOGIC = OutputType.SRD_OUTPUT_LOGIC
 OUTPUT_META = OutputType.SRD_OUTPUT_META
+
+SRD_CONF_SAMPLERATE = 1
 
 def SR_KHZ(num):
     return num * 1000
@@ -54,7 +56,10 @@ class Decoder:
             for cond in conds:
                 data_cond = {}
                 for k in cond:
-                    data_cond[self.decoder_channel_to_data_channel[k]] = cond[k]
+                    if k == "skip":
+                        data_cond["skip"] = cond[k]
+                    else:
+                        data_cond[self.decoder_channel_to_data_channel[k]] = cond[k]
                 data_conds.append(data_cond)
         raw_data = self.input.wait(data_conds)
         data = [None] * (len(self.channels) + len(getattr(self, "optional_channels", [])))
