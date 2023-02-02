@@ -6,7 +6,7 @@ if sys.version_info < (3, 10):
 else:
     from importlib.metadata import entry_points
 
-__version__ = "0.0.7"
+__version__ = "0.0.8"
 
 class OutputType(Enum):
     SRD_OUTPUT_ANN = 0
@@ -32,18 +32,23 @@ def SR_MHZ(num):
 class Decoder:
     # __init__() won't get called by subclasses
 
-    def register(self, output_type, meta=None):
+    def register(self, output_type, proto_id=None, meta=None):
         # print("register", output_type, meta)
         return output_type
 
-    def add_callback(self, output_type, fun):
+    def metadata(self, key, value):
+        # Backup for decoders that don't care.
+        pass
+
+    def add_callback(self, output_type, output_filter, fun):
+        # print(output_type, output_filter, fun)
         if not hasattr(self, "callbacks"):
             self.callbacks = {}
 
         if output_type not in self.callbacks:
             self.callbacks[output_type] = set()
 
-        self.callbacks[output_type].add(fun)
+        self.callbacks[output_type].add((output_filter, fun))
 
     def wait(self, conds=None):
         assert(hasattr(self, "input"))
@@ -74,7 +79,16 @@ class Decoder:
         # print(startsample, endsample, output_id, data)
         if not output_id in self.callbacks:
             return
-        for cb in self.callbacks[output_id]:
+        for output_filter, cb in self.callbacks[output_id]:
+            if output_filter is not None:
+                if output_id == OUTPUT_ANN:
+                    annotation = self.annotations[data[0]]
+                    if annotation[0] != output_filter:
+                        continue
+                elif output_id == OUTPUT_BINARY:
+                    track = self.binary[data[0]]
+                    if track[0] != output_filter:
+                        continue
             cb(startsample, endsample, data)
 
     def set_channelnum(self, channelname, channelnum):
