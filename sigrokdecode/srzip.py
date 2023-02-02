@@ -24,7 +24,7 @@ class SrZip:
         self.metadata.read_string(self.zip.read("metadata").decode("ascii"))
         self.samplenum = -1
         self.matched = None
-        # print(self.version)
+        self.single_file = "logic-1" in self.zip.namelist()
         # for s in self.metadata.sections():
         #     print(s)
         #     for o in self.metadata.options(s):
@@ -38,13 +38,16 @@ class SrZip:
         else:
             self.samplerate = int(samplerate)
 
-        self.last_sample = 0
-        for channel in initial_state:
-            self.last_sample |= initial_state[channel] << channel
+        if initial_state:
+            self.last_sample = 0
+            for channel in initial_state:
+                self.last_sample |= initial_state[channel] << channel
+        else:
+            self.last_sample = None
         self.unitsize = int(self.metadata.get("device 1", "unitsize"))
         self.typecode = TYPECODE[self.unitsize]
 
-        if self.version == 1:
+        if self.single_file:
             self.data = self.zip.read("logic-1")
             if self.unitsize > 1:
                 self.data = array.array(self.typecode, self.data)
@@ -58,11 +61,11 @@ class SrZip:
         while not any(self.matched):
             self.matched = [True] * len(conds)
             self.samplenum += 1
-            if self.version == 1:
+            if self.single_file:
                 if self.samplenum >= len(self.data):
                     raise EOFError()
                 sample = self.data[self.samplenum]
-            elif self.version == 2:
+            else:
                 file_samplenum = self.samplenum - self._file_start
                 if self.data is None or file_samplenum >= len(self.data):
                     self._file_start = self.samplenum
@@ -77,6 +80,9 @@ class SrZip:
                     file_samplenum = 0
                     self._file_index += 1
                 sample = self.data[file_samplenum]
+
+            if self.last_sample is None:
+                self.last_sample = sample
 
             for i, cond in enumerate(conds):
                 for channel in cond:

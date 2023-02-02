@@ -6,7 +6,7 @@ if sys.version_info < (3, 10):
 else:
     from importlib.metadata import entry_points
 
-__version__ = "0.0.6"
+__version__ = "0.0.7"
 
 class OutputType(Enum):
     SRD_OUTPUT_ANN = 0
@@ -61,11 +61,13 @@ class Decoder:
                     else:
                         data_cond[self.decoder_channel_to_data_channel[k]] = cond[k]
                 data_conds.append(data_cond)
+
         raw_data = self.input.wait(data_conds)
         data = [None] * (len(self.channels) + len(getattr(self, "optional_channels", [])))
         for decoder_channel in self.decoder_channel_to_data_channel:
             data_channel = self.decoder_channel_to_data_channel[decoder_channel]
             data[decoder_channel] = raw_data[data_channel]
+
         return tuple(data)
 
     def put(self, startsample, endsample, output_id, data):

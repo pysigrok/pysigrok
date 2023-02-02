@@ -22,6 +22,7 @@ for decoder in decoders:
 @click.option("--list-supported", "-L", is_flag=True, default=False)
 @click.option("--list-serial", is_flag=True, default=False)
 @click.option("-d", "--driver")
+@click.option("-c", "--config", "configs")
 @click.option("-i", "--input-file")
 @click.option("-I", "--input-format")
 @click.option("-o", "--output-file")
@@ -31,7 +32,7 @@ for decoder in decoders:
 @click.option("--samples", type=int)
 @click.option("--frames")
 @click.option("--continuous", is_flag=True)
-def main(list_supported, list_serial, driver, input_file, input_format, output_file, output_format, channels, sample_time, samples, frames, continuous):
+def main(list_supported, list_serial, driver, configs, input_file, input_format, output_file, output_format, channels, sample_time, samples, frames, continuous):
 
     if list_supported:
         print("Supported hardware drivers:")
@@ -55,19 +56,25 @@ def main(list_supported, list_serial, driver, input_file, input_format, output_f
             print(" ", port)
 
     if driver:
+        driver_options = {}
         if ":" in driver:
             driver, options = driver.split(":", maxsplit=1)
-            driver_options = {}
             for option in options.split(":"):
                 k, v = option.split("=", maxsplit=1)
                 driver_options[k] = v
+        driver_configs = {}
+        if configs:
+            for config in configs.split(":"):
+                k, v = config.split("=", maxsplit=1)
+                driver_configs[k] = v
+
         driver_class = None
         for hw in drivers:
             loaded = hw.load()
             if loaded.name == driver:
                 driver_class = loaded
 
-        driver = driver_class(**driver_options)
+        driver = driver_class(**driver_options, **driver_configs)
 
         if samples:
             # acquire data
