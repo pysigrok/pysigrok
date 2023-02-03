@@ -6,7 +6,7 @@ if sys.version_info < (3, 10):
 else:
     from importlib.metadata import entry_points
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 class OutputType(Enum):
     SRD_OUTPUT_ANN = 0
@@ -50,7 +50,7 @@ class Decoder:
 
         self.callbacks[output_type].add((output_filter, fun))
 
-    def wait(self, conds=None):
+    def wait(self, conds=[]):
         assert(hasattr(self, "input"))
         if isinstance(conds, dict):
             conds = [conds]

@@ -21,6 +21,8 @@ UNITS = {
     "KHz": 1000,
     "MHz": 1000000,
     "mHz": 1000000,
+    "GHz": 1000000000,
+    "gHz": 1000000000,
 }
 
 class SrZipInput:
@@ -66,10 +68,12 @@ class SrZipInput:
             self._file_start = -1
             self._file_index = 1
 
-    def wait(self, conds=None):
+    def wait(self, conds=[]):
+        if conds is None:
+            conds = []
         self.matched = [False]
         while not any(self.matched):
-            self.matched = [True] * len(conds)
+            self.matched = [True] * (len(conds) if conds else 1)
             self.samplenum += 1
             if self.single_file:
                 if self.samplenum >= len(self.data):
