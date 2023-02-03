@@ -2,6 +2,12 @@ import array
 import zipfile
 import configparser
 import struct
+import pathlib
+import io
+
+from .output import Output
+
+from . import cond_matches, __version__
 
 TYPECODE = {
     1: "B",
@@ -17,7 +23,9 @@ UNITS = {
     "mHz": 1000000,
 }
 
-class SrZip:
+class SrZipInput:
+    name = "srzip"
+    desc = "srzip session file format data"
     def __init__(self, filename, initial_state=None):
         self.zip = zipfile.ZipFile(filename)
         # self.zip.printdir()
@@ -87,23 +95,11 @@ class SrZip:
                 self.last_sample = sample
 
             for i, cond in enumerate(conds):
-                for channel in cond:
-                    if channel == "skip":
-                        cond[channel] -= 1
-                        self.matched[i] = cond[channel] == 0
-                        continue
-                    state = cond[channel]
-                    mask = 1 << channel
-                    last_value = self.last_sample & mask
-                    value = sample & mask
-                    if ((state == "l" and value != 0) or
-                        (state == "h" and value == 0) or
-                        (state == "r" and not (last_value == 0 and value != 0)) or
-                        (state == "f" and not (last_value != 0 and value == 0)) or
-                        (state == "e" and last_value == value) or
-                        (state == "s" and last_value != value)):
-                            self.matched[i] = False
-                            break
+                if "skip" in cond:
+                    cond["skip"] -= 1
+                    self.matched[i] = cond["skip"] == 0
+                    continue
+                self.matched[i] = cond_matches(cond, self.last_sample, sample)
             self.last_sample = sample
 
         bits = []
@@ -112,3 +108,59 @@ class SrZip:
 
         return tuple(bits)
 
+CHUNK_SIZE = 4 * 1024 * 1024
+
+class SrZipOutput(Output):
+    name = "srzip"
+    desc = "srzip session file format data"
+    def __init__(self, filename, driver, logic_channels=[], analog_channels=[], annotations=[]):
+        if annotations:
+            raise NotImplementedError("Annotations can't be saved into .sr files.")
+
+        self.zip = zipfile.ZipFile(filename, "w", compression=zipfile.ZIP_DEFLATED)
+
+        self.zip.writestr("version", "2")
+        self.metadata = configparser.ConfigParser()
+        # libsigrok skips the global section.
+        self.metadata.add_section("global")
+        self.metadata.set("global", "pysigrok version", __version__)
+
+        self.metadata.add_section("device 1")
+        self.metadata.set("device 1", "driver", driver.name)
+        self.metadata.set("device 1", "samplerate", str(driver.samplerate))
+        self.logic_buffer = None
+        if logic_channels:
+            self.capturefile = "logic-1"
+            self.count = 1
+            self.metadata.set("device 1", "capturefile", self.capturefile)
+            self.unitsize = len(logic_channels) // 8 + 1
+            self.metadata.set("device 1", "unitsize", str(self.unitsize))
+            self.metadata.set("device 1", "total probes", str(len(logic_channels)))
+            for i, channelname in enumerate(logic_channels):
+                self.metadata.set("device 1", f"probe{i+1:d}", channelname)
+            self.logic_buffer = array.array(TYPECODE[self.unitsize])
+        if analog_channels:
+            self.metadata.set("device 1", "total analog", len(analog_channels))
+            for i, channelname in enumerate(analog_channels):
+                self.metadata.set("device 1", f"analog{i+1:d}", channelname)
+
+        with self.zip.open("metadata", "w") as f:
+            self.metadata.write(io.TextIOWrapper(f))
+
+
+    def decode(self, startsample, endsample, data):
+        ptype = data[0]
+        if ptype == "logic":
+            for _ in range(startsample, endsample):
+                self.logic_buffer.append(data[1])
+                if len(self.logic_buffer) >= CHUNK_SIZE:
+                    fn = f"{self.capturefile}-{self.count:d}"
+                    self.zip.writestr(f"{self.capturefile}-{self.count:d}", self.logic_buffer.tobytes())
+                    self.count += 1
+                    self.logic_buffer = array.array(TYPECODE[self.unitsize])
+
+    def stop(self):
+        if self.logic_buffer:
+            fn = f"{self.capturefile}-{self.count:d}"
+            self.zip.writestr(fn, self.logic_buffer.tobytes())
+        self.zip.close()

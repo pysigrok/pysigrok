@@ -21,3 +21,10 @@ name = "sigrokdecode"
 [project.scripts]
 pysigrok-cli = "sigrokdecode.cli:main"
 pysigrok-runtc = "sigrokdecode.runtc:main"
+
+[project.entry-points."pysigrok.input_format"]
+srzip = "sigrokdecode.srzip:SrZipInput"
+
+[project.entry-points."pysigrok.output_format"]
+srzip = "sigrokdecode.srzip:SrZipOutput"
+bits = "sigrokdecode.bits:BitsOutput"

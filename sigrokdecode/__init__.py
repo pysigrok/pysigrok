@@ -6,7 +6,7 @@ if sys.version_info < (3, 10):
 else:
     from importlib.metadata import entry_points
 
-__version__ = "0.0.8"
+__version__ = "0.1.0"
 
 class OutputType(Enum):
     SRD_OUTPUT_ANN = 0
@@ -117,8 +117,38 @@ class Decoder:
     def matched(self):
         return self.input.matched
 
+    def run(self, input_):
+        self.input = input_
+        try:
+            self.decode()
+        except EOFError:
+            pass
+
+    def stop(self):
+        pass
+
 def get_decoder(decoder_id):
     discovered_plugins = entry_points(name=decoder_id, group='pysigrok.decoders')
     if len(discovered_plugins) == 1:
         return discovered_plugins[0].load()
     raise RuntimeError("Decoder id ambiguous:" + ",".join([p.name for p in discovered_plugins]))
+
+
+def cond_matches(cond, last_sample, current_sample):
+    matches = True
+    for channel in cond:
+        if channel == "skip":
+            continue
+        state = cond[channel]
+        mask = 1 << channel
+        last_value = last_sample & mask
+        value = current_sample & mask
+        if ((state == "l" and value != 0) or
+            (state == "h" and value == 0) or
+            (state == "r" and not (last_value == 0 and value != 0)) or
+            (state == "f" and not (last_value != 0 and value == 0)) or
+            (state == "e" and last_value == value) or
+            (state == "s" and last_value != value)):
+                matches = False
+                break
+    return matches

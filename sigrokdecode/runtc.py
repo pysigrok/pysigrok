@@ -55,8 +55,6 @@ class OrderedParamsCommand(click.Command):
 @click.option("-O", "--output-format")
 @click.option("-f", "--output-file")
 def main(protocol_decoder, pin_mapping, channel_option, channel_initial_value, input_file, output_format, output_file):
-
-
     decoders = []
     current_decoder = None
     for param, value in OrderedParamsCommand._options:
@@ -94,7 +92,7 @@ def main(protocol_decoder, pin_mapping, channel_option, channel_initial_value, i
     output_type = OUTPUT_TYPES[output_name]
     next_decoder = Output(f, output_type, decoders[-1]["cls"])
 
-    data = srzip.SrZip(input_file, initial_values)
+    data = srzip.SrZipInput(input_file, initial_values)
     all_decoders = []
     for decoder_info in reversed(decoders):
         decoder_class = decoder_info["cls"]
@@ -117,15 +115,17 @@ def main(protocol_decoder, pin_mapping, channel_option, channel_initial_value, i
         output_type = OUTPUT_PYTHON
         output_filter = None
 
-    decoder.input = data
+    first_decoder = all_decoders[0]
+    first_decoder.input = data
     for d in all_decoders:
         d.reset()
         d.start()
     if data.samplerate > 0:
-        decoder.metadata(SRD_CONF_SAMPLERATE, data.samplerate)
-    try:
-        decoder.decode()
-    except EOFError:
-        pass
+        first_decoder.metadata(SRD_CONF_SAMPLERATE, data.samplerate)
+    
+    first_decoder.run(data)
+
+    for d in all_decoders:
+        d.stop()
 
     f.close()

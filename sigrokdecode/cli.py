@@ -1,4 +1,5 @@
 import click
+import pathlib
 from serial.tools import list_ports
 import sys
 if sys.version_info < (3, 10):
@@ -12,6 +13,18 @@ for hw in drivers:
     loaded = hw.load()
     driver_classes[loaded.name] = loaded
 
+input_formats = entry_points(group='pysigrok.input_format')
+input_classes = {}
+for f in input_formats:
+    loaded = f.load()
+    input_classes[loaded.name] = loaded
+
+output_formats = entry_points(group='pysigrok.output_format')
+output_classes = {}
+for f in output_formats:
+    loaded = f.load()
+    output_classes[loaded.name] = loaded
+
 decoders = entry_points(group='pysigrok.decoders')
 decoder_classes = {}
 for decoder in decoders:
@@ -24,7 +37,7 @@ for decoder in decoders:
 @click.option("-d", "--driver")
 @click.option("-c", "--config", "configs")
 @click.option("-i", "--input-file")
-@click.option("-I", "--input-format")
+@click.option("-I", "--input-format", default="srzip")
 @click.option("-o", "--output-file")
 @click.option("-O", "--output-format")
 @click.option("-C", "--channels")
@@ -41,8 +54,14 @@ def main(list_supported, list_serial, driver, configs, input_file, input_format,
             print(f"  {driver_id}\t{driver_class.longname}")
         print()
         print("Supported input formats:")
+        for input_format_id in input_classes:
+            input_class = input_classes[input_format_id]
+            print(f"  {input_format_id}\t{input_class.desc}")
         print()
         print("Supported output formats:")
+        for output_format_id in output_classes:
+            output_class = output_classes[output_format_id]
+            print(f"  {output_format_id}\t{output_class.desc}")
         print()
         print("Supported transform modules:")
         print()
@@ -74,8 +93,41 @@ def main(list_supported, list_serial, driver, configs, input_file, input_format,
             if loaded.name == driver:
                 driver_class = loaded
 
-        driver = driver_class(**driver_options, **driver_configs)
+        driver = driver_class(channels, **driver_options, **driver_configs)
 
         if samples:
             # acquire data
             driver.acquire(samples)
+
+            if output_file:
+                # Delete the file if it exists
+                p = pathlib.Path(output_file)
+                p.unlink(missing_ok=True)
+                f = open(output_file, "wb")
+                if not output_format:
+                    output_format = "srzip"
+            else:
+                f = sys.stdout
+                if not output_format:
+                    output_format = "bits:width=64"
+            output_options = {}
+            if ":" in output_format:
+                output_split = output_format.split(":")
+                output_format_id = output_split[0]
+                for option in output_split[1:]:
+                    if "=" in option:
+                        k, v = option.split("=")
+                        output_options[k] = v
+                    else:
+                        output_options[option] = "true"
+            else:
+                output_format_id = output_format
+
+            output_class = output_classes[output_format_id]
+
+            next_decoder = output_class(f, driver, logic_channels=driver.logic_channels, **output_options)
+            next_decoder.reset()
+            next_decoder.start()
+            next_decoder.run(driver)
+
+            next_decoder.stop()
