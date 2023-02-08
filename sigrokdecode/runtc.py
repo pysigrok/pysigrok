@@ -119,9 +119,12 @@ def main(protocol_decoder, pin_mapping, channel_option, channel_initial_value, i
     first_decoder.input = data
     for d in all_decoders:
         d.reset()
-        d.start()
+
     if data.samplerate > 0:
         first_decoder.metadata(SRD_CONF_SAMPLERATE, data.samplerate)
+
+    for d in all_decoders:
+        d.start()
     
     first_decoder.run(data)
 

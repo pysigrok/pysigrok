@@ -27,7 +27,11 @@ class Output:
                     if v:
                         bits |= 1 << i
                 self.decode(startsample, endsample, ["logic", bits])
+            if input_.analog_channels:
+                for samplenum in range(startsample, endsample):
+                    self.decode(samplenum, samplenum + 1, ["analog"] + input_.get_analog_values(samplenum))
             last_values = values
+
 
     def stop(self):
         pass

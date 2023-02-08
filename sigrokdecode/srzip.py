@@ -12,7 +12,8 @@ from . import cond_matches, __version__
 TYPECODE = {
     1: "B",
     2: "H",
-    4: "L"
+    4: "L",
+    5: "Q"
 }
 
 UNITS = {
@@ -43,12 +44,18 @@ class SrZipInput:
         #         print(" ", o, self.metadata.get(s, o))
 
         samplerate = self.metadata.get("device 1", "samplerate", fallback="0")
-        # print(samplerate)
+        self.samplerate = None
         if " " in samplerate:
             num, units = samplerate.split(" ")
             self.samplerate = float(num) * UNITS[units]
         else:
-            self.samplerate = int(samplerate)
+            # check for a suffix with Hz last
+            for suffix in reversed(UNITS):
+                if suffix in samplerate:
+                    self.samplerate = int(samplerate[:-len(suffix)]) * UNITS[suffix]
+                    break
+            if self.samplerate is None:
+                self.samplerate = int(samplerate)
 
         if initial_state:
             self.last_sample = 0
@@ -59,6 +66,18 @@ class SrZipInput:
         self.unitsize = int(self.metadata.get("device 1", "unitsize"))
         self.typecode = TYPECODE[self.unitsize]
 
+
+        total_logic = int(self.metadata.get("device 1", "total probes", fallback="0"))
+        total_analog = int(self.metadata.get("device 1", "total analog", fallback="0"))
+        self.logic_channels = []
+        self.analog_channels = []
+        for i in range(total_logic):
+            name = self.metadata.get("device 1", f"probe{i + 1}")
+            self.logic_channels.append(name)
+        for i in range(total_analog):
+            name = self.metadata.get("device 1", f"analog{total_logic + i + 1}")
+            self.analog_channels.append(name)
+
         if self.single_file:
             self.data = self.zip.read("logic-1")
             if self.unitsize > 1:
@@ -67,6 +86,14 @@ class SrZipInput:
             self.data = None
             self._file_start = -1
             self._file_index = 1
+
+        if self.analog_channels:
+            self._analog_file_index = 1
+            self._analog_data = []
+            for c in range(total_logic + 1, total_logic + 1 + total_analog):
+                self._analog_data.append(self.zip.read(f"analog-1-{c}-{self._analog_file_index}"))
+            self._analog_offset = 0
+            self._analog_chunk_len = len(self._analog_data[0]) // 4
 
     def wait(self, conds=[]):
         if conds is None:
@@ -96,7 +123,8 @@ class SrZipInput:
                 sample = self.data[file_samplenum]
 
             if self.last_sample is None:
-                self.last_sample = sample
+                # Always match at the start
+                break
 
             for i, cond in enumerate(conds):
                 if "skip" in cond:
@@ -111,6 +139,23 @@ class SrZipInput:
             bits.append((sample >> b) & 0x1)
 
         return tuple(bits)
+
+    def get_analog_values(self, samplenum):
+        if samplenum >= (self._analog_offset + self._analog_chunk_len):
+            self._analog_offset += self._analog_chunk_len
+            self._analog_file_index += 1
+            self._analog_data = []
+            total_logic = len(self.logic_channels)
+            total_analog = len(self.analog_channels)
+            for c in range(total_logic + 1, total_logic + 1 + total_analog):
+                self._analog_data.append(self.zip.read(f"analog-1-{c}-{self._analog_file_index}"))
+            self._analog_chunk_len = len(self._analog_data[0]) // 4
+
+        values = []
+        for data in self._analog_data:
+            values.append(struct.unpack_from("f", data, (samplenum - self._analog_offset) * 4)[0])
+
+        return values
 
 CHUNK_SIZE = 4 * 1024 * 1024
 
@@ -133,6 +178,9 @@ class SrZipOutput(Output):
         self.metadata.set("device 1", "driver", driver.name)
         self.metadata.set("device 1", "samplerate", str(driver.samplerate))
         self.logic_buffer = None
+        self._analog_buffers = []
+        self._analog_indices = []
+        self._analog_count = 1
         if logic_channels:
             self.capturefile = "logic-1"
             self.count = 1
@@ -144,8 +192,11 @@ class SrZipOutput(Output):
                 self.metadata.set("device 1", f"probe{i+1:d}", channelname)
             self.logic_buffer = array.array(TYPECODE[self.unitsize])
         if analog_channels:
-            self.metadata.set("device 1", "total analog", len(analog_channels))
+            self.metadata.set("device 1", "total analog", str(len(analog_channels)))
             for i, channelname in enumerate(analog_channels):
+                i += len(logic_channels)
+                self._analog_indices.append(i + 1)
+                self._analog_buffers.append(array.array("f"))
                 self.metadata.set("device 1", f"analog{i+1:d}", channelname)
 
         with self.zip.open("metadata", "w") as f:
@@ -157,14 +208,28 @@ class SrZipOutput(Output):
         if ptype == "logic":
             for _ in range(startsample, endsample):
                 self.logic_buffer.append(data[1])
-                if len(self.logic_buffer) >= CHUNK_SIZE:
+                if len(self.logic_buffer) * self.logic_buffer.itemsize >= CHUNK_SIZE:
                     fn = f"{self.capturefile}-{self.count:d}"
-                    self.zip.writestr(f"{self.capturefile}-{self.count:d}", self.logic_buffer.tobytes())
+                    self.zip.writestr(fn, self.logic_buffer.tobytes())
                     self.count += 1
                     self.logic_buffer = array.array(TYPECODE[self.unitsize])
+        elif ptype == "analog":
+            for _ in range(startsample, endsample):
+                if len(self._analog_buffers[0]) * 4 >= CHUNK_SIZE:
+                    for i, file_index in enumerate(self._analog_indices):
+                        fn = f"analog-1-{file_index:d}-{self._analog_count:d}"
+                        self.zip.writestr(fn, self._analog_buffers[i].tobytes())
+                        self._analog_buffers[i] = array.array("f")
+                    self._analog_count += 1
+                for i, file_index in enumerate(self._analog_indices):
+                    self._analog_buffers[i].append(data[1 + i])
 
     def stop(self):
         if self.logic_buffer:
             fn = f"{self.capturefile}-{self.count:d}"
             self.zip.writestr(fn, self.logic_buffer.tobytes())
+        if self._analog_buffers:
+            for i, file_index in enumerate(self._analog_indices):
+                fn = f"analog-1-{file_index:d}-{self._analog_count:d}"
+                self.zip.writestr(fn, self._analog_buffers[i].tobytes())
         self.zip.close()

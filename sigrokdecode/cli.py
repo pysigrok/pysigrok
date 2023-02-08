@@ -69,10 +69,12 @@ def main(list_supported, list_serial, driver, configs, input_file, input_format,
         for pd in decoder_classes:
             decoder_class = decoder_classes[pd]
             print(f"  {pd}\t{decoder_class.longname}")
+        return
     elif list_serial:
         print("Available serial ports:")
         for port in list_ports.comports():
             print(" ", port)
+        return
 
     if driver:
         driver_options = {}
@@ -99,35 +101,40 @@ def main(list_supported, list_serial, driver, configs, input_file, input_format,
             # acquire data
             driver.acquire(samples)
 
-            if output_file:
-                # Delete the file if it exists
-                p = pathlib.Path(output_file)
-                p.unlink(missing_ok=True)
-                f = open(output_file, "wb")
-                if not output_format:
-                    output_format = "srzip"
+    elif input_file:
+        input_class = input_classes[input_format]
+        driver = input_class(input_file)
+
+
+    if output_file:
+        # Delete the file if it exists
+        p = pathlib.Path(output_file)
+        p.unlink(missing_ok=True)
+        f = open(output_file, "wb")
+        if not output_format:
+            output_format = "srzip"
+    else:
+        f = sys.stdout
+        if not output_format:
+            output_format = "bits:width=64"
+    output_options = {}
+    if ":" in output_format:
+        output_split = output_format.split(":")
+        output_format_id = output_split[0]
+        for option in output_split[1:]:
+            if "=" in option:
+                k, v = option.split("=")
+                output_options[k] = v
             else:
-                f = sys.stdout
-                if not output_format:
-                    output_format = "bits:width=64"
-            output_options = {}
-            if ":" in output_format:
-                output_split = output_format.split(":")
-                output_format_id = output_split[0]
-                for option in output_split[1:]:
-                    if "=" in option:
-                        k, v = option.split("=")
-                        output_options[k] = v
-                    else:
-                        output_options[option] = "true"
-            else:
-                output_format_id = output_format
+                output_options[option] = "true"
+    else:
+        output_format_id = output_format
 
-            output_class = output_classes[output_format_id]
+    output_class = output_classes[output_format_id]
 
-            next_decoder = output_class(f, driver, logic_channels=driver.logic_channels, **output_options)
-            next_decoder.reset()
-            next_decoder.start()
-            next_decoder.run(driver)
+    next_decoder = output_class(f, driver, logic_channels=driver.logic_channels, analog_channels=driver.analog_channels, **output_options)
+    next_decoder.reset()
+    next_decoder.start()
+    next_decoder.run(driver)
 
-            next_decoder.stop()
+    next_decoder.stop()
