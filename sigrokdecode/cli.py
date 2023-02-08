@@ -117,7 +117,12 @@ def main(
         driver = driver_class(channels, **driver_options, **driver_configs)
 
         if samples:
-            triggers = triggers.split(",")
+            if not triggers:
+                triggers = []
+            elif "," in triggers:
+                triggers = triggers.split(",")
+            else:
+                triggers = [triggers]
             trigger_dict = {}
             for t in triggers:
                 pin, condition = t.split("=")
