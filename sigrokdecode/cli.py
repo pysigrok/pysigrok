@@ -3,6 +3,8 @@ import pathlib
 from serial.tools import list_ports
 import sys
 
+from . import run_decoders
+
 if sys.version_info < (3, 10):
     from importlib_metadata import entry_points
 else:
@@ -45,6 +47,7 @@ for decoder in decoders:
 @click.option("-C", "--channels", help="comma separated list of channels to capture")
 @click.option("-t", "--triggers", help="comma separated list of triggers")
 @click.option("-w", "--wait-trigger", is_flag=True, default=False)
+@click.option("-P", "--protocol-decoders", help="comma separated list of protocol decoders to run. Options are colon separated.")
 @click.option("--time", "sample_time")
 @click.option("--samples", type=int)
 @click.option("--frames")
@@ -61,6 +64,7 @@ def main(
     channels,
     triggers,
     wait_trigger,
+    protocol_decoders,
     sample_time,
     samples,
     frames,
@@ -166,15 +170,49 @@ def main(
 
     output_class = output_classes[output_format_id]
 
-    next_decoder = output_class(
+    output = output_class(
         f,
         driver,
         logic_channels=driver.logic_channels,
         analog_channels=driver.analog_channels,
         **output_options,
     )
-    next_decoder.reset()
-    next_decoder.start()
-    next_decoder.run(driver)
 
-    next_decoder.stop()
+    if not protocol_decoders:
+        protocol_decoders = []
+    elif "," not in protocol_decoders:
+        protocol_decoders = [protocol_decoders]
+    else:
+        protocol_decoders = protocol_decoders.split(",")
+    decoders = []
+    for pd in protocol_decoders:
+        if ":" in pd:
+            pd_id, unparsed_options = pd.split(":", maxsplit=1)
+        else:
+            pd_id = pd
+            unparsed_options = ""
+
+        pd_class = decoder_classes[pd_id]
+        options = {}
+        for default_option in pd_class.options:
+            options[default_option["id"]] = default_option["default"]
+
+        pin_mapping = {}
+        for unparsed_option in unparsed_options.split(":"):
+            k, v = unparsed_option.split("=")
+            if k in options:
+                if isinstance(options[k], int):
+                    v = int(v)
+                options[k] = v
+            else:
+                for channel in getattr(pd_class, "channels", tuple()) + getattr(pd_class, "optional_channels", tuple()):
+                    if channel["id"] == k:
+                        try:
+                            channelnum = int(v)
+                        except ValueError:
+                            channelnum = driver.logic_channels.index(v)
+                        pin_mapping[k] = channelnum
+
+        decoders.append({"id": pd_id, "cls": pd_class, "options": options, "pin_mapping": pin_mapping})
+
+    run_decoders(driver, output, decoders)

@@ -6,8 +6,9 @@ import pathlib
 import io
 
 from .output import Output
+from .input import Input
 
-from . import cond_matches, __version__
+from . import cond_matches, __version__, OUTPUT_PYTHON
 
 TYPECODE = {
     1: "B",
@@ -26,24 +27,26 @@ UNITS = {
     "gHz": 1000000000,
 }
 
-class SrZipInput:
+class SrZipInput(Input):
     name = "srzip"
     desc = "srzip session file format data"
     def __init__(self, filename, initial_state=None):
+        super().__init__()
         self.zip = zipfile.ZipFile(filename)
         # self.zip.printdir()
-        self.metadata = configparser.ConfigParser()
+        metadata = configparser.ConfigParser()
         self.version = int(self.zip.read("version").decode("ascii"))
-        self.metadata.read_string(self.zip.read("metadata").decode("ascii"))
+        metadata.read_string(self.zip.read("metadata").decode("ascii"))
+        self.start_samplenum = None
         self.samplenum = -1
         self.matched = None
         self.single_file = "logic-1" in self.zip.namelist()
-        # for s in self.metadata.sections():
+        # for s in metadata.sections():
         #     print(s)
-        #     for o in self.metadata.options(s):
-        #         print(" ", o, self.metadata.get(s, o))
+        #     for o in metadata.options(s):
+        #         print(" ", o, metadata.get(s, o))
 
-        samplerate = self.metadata.get("device 1", "samplerate", fallback="0")
+        samplerate = metadata.get("device 1", "samplerate", fallback="0")
         self.samplerate = None
         if " " in samplerate:
             num, units = samplerate.split(" ")
@@ -63,19 +66,22 @@ class SrZipInput:
                 self.last_sample |= initial_state[channel] << channel
         else:
             self.last_sample = None
-        self.unitsize = int(self.metadata.get("device 1", "unitsize"))
+        self.unitsize = int(metadata.get("device 1", "unitsize"))
         self.typecode = TYPECODE[self.unitsize]
 
 
-        total_logic = int(self.metadata.get("device 1", "total probes", fallback="0"))
-        total_analog = int(self.metadata.get("device 1", "total analog", fallback="0"))
+        total_logic = int(metadata.get("device 1", "total probes", fallback="0"))
+        total_analog = int(metadata.get("device 1", "total analog", fallback="0"))
         self.logic_channels = []
         self.analog_channels = []
         for i in range(total_logic):
-            name = self.metadata.get("device 1", f"probe{i + 1}")
+            probe_name = f"probe{i + 1}"
+            if not metadata.has_option("device 1", probe_name):
+                continue
+            name = metadata.get("device 1", probe_name)
             self.logic_channels.append(name)
         for i in range(total_analog):
-            name = self.metadata.get("device 1", f"analog{total_logic + i + 1}")
+            name = metadata.get("device 1", f"analog{total_logic + i + 1}")
             self.analog_channels.append(name)
 
         if self.single_file:
@@ -123,8 +129,15 @@ class SrZipInput:
                 sample = self.data[file_samplenum]
 
             if self.last_sample is None:
-                # Always match at the start
-                break
+                self.last_sample = sample
+                self.start_samplenum = self.samplenum
+
+            if self.last_sample != sample:
+                self.put(self.start_samplenum, self.samplenum, OUTPUT_PYTHON, ["logic", self.last_sample])
+                self.start_samplenum = self.samplenum
+
+            if self.analog_channels:
+                self.put(self.samplenum, self.samplenum + 1, OUTPUT_PYTHON, ["analog"] + get_analog_values(self.samplenum))
 
             for i, cond in enumerate(conds):
                 if "skip" in cond:
@@ -163,20 +176,22 @@ class SrZipOutput(Output):
     name = "srzip"
     desc = "srzip session file format data"
     def __init__(self, filename, driver, logic_channels=[], analog_channels=[], annotations=[]):
+        super().__init__()
         if annotations:
             raise NotImplementedError("Annotations can't be saved into .sr files.")
 
         self.zip = zipfile.ZipFile(filename, "w", compression=zipfile.ZIP_DEFLATED)
 
         self.zip.writestr("version", "2")
-        self.metadata = configparser.ConfigParser()
+        metadata = configparser.ConfigParser()
         # libsigrok skips the global section.
-        self.metadata.add_section("global")
-        self.metadata.set("global", "pysigrok version", __version__)
+        metadata.add_section("global")
+        metadata.set("global", "pysigrok version", __version__)
 
-        self.metadata.add_section("device 1")
-        self.metadata.set("device 1", "driver", driver.name)
-        self.metadata.set("device 1", "samplerate", str(driver.samplerate))
+        metadata.add_section("device 1")
+        metadata.set("device 1", "driver", driver.name)
+        metadata.set("device 1", "samplerate", str(driver.samplerate))
+        self.driver = driver
         self.logic_buffer = None
         self._analog_buffers = []
         self._analog_indices = []
@@ -184,26 +199,29 @@ class SrZipOutput(Output):
         if logic_channels:
             self.capturefile = "logic-1"
             self.count = 1
-            self.metadata.set("device 1", "capturefile", self.capturefile)
+            metadata.set("device 1", "capturefile", self.capturefile)
             self.unitsize = len(logic_channels) // 8 + 1
-            self.metadata.set("device 1", "unitsize", str(self.unitsize))
-            self.metadata.set("device 1", "total probes", str(len(logic_channels)))
+            metadata.set("device 1", "unitsize", str(self.unitsize))
+            metadata.set("device 1", "total probes", str(len(logic_channels)))
             for i, channelname in enumerate(logic_channels):
-                self.metadata.set("device 1", f"probe{i+1:d}", channelname)
+                metadata.set("device 1", f"probe{i+1:d}", channelname)
             self.logic_buffer = array.array(TYPECODE[self.unitsize])
         if analog_channels:
-            self.metadata.set("device 1", "total analog", str(len(analog_channels)))
+            metadata.set("device 1", "total analog", str(len(analog_channels)))
             for i, channelname in enumerate(analog_channels):
                 i += len(logic_channels)
                 self._analog_indices.append(i + 1)
                 self._analog_buffers.append(array.array("f"))
-                self.metadata.set("device 1", f"analog{i+1:d}", channelname)
+                metadata.set("device 1", f"analog{i+1:d}", channelname)
 
         with self.zip.open("metadata", "w") as f:
-            self.metadata.write(io.TextIOWrapper(f))
+            metadata.write(io.TextIOWrapper(f))
 
 
-    def decode(self, startsample, endsample, data):
+    def output(self, source, startsample, endsample, data):
+        # Only output data from the input driver.
+        if source != self.driver:
+            return
         ptype = data[0]
         if ptype == "logic":
             for _ in range(startsample, endsample):

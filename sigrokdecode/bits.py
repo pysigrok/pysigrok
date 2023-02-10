@@ -8,7 +8,7 @@ class BitsOutput(Output):
         self.logic_channels = logic_channels
         self.samplenum = 0
 
-    def decode(self, startsample, endsample, data):
+    def output(self, source, startsample, endsample, data):
         ptype = data[0]
         if ptype == "logic":
             values = []
@@ -29,6 +29,10 @@ class BitsOutput(Output):
                         self.lines[bit].append(" ")
         elif ptype == "analog":
             # print(data)
+            pass
+        else:
+            # annotation
+            print(data[1][0])
             pass
 
     def stop(self):

@@ -5,8 +5,9 @@ if sys.version_info < (3, 10):
     from importlib_metadata import entry_points
 else:
     from importlib.metadata import entry_points
+import functools
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 
 class OutputType(Enum):
     SRD_OUTPUT_ANN = 0
@@ -138,7 +139,7 @@ def cond_matches(cond, last_sample, current_sample):
     matches = True
     for channel in cond:
         if channel == "skip":
-            continue
+            return cond["skip"] == 0
         state = cond[channel]
         mask = 1 << channel
         last_value = last_sample & mask
@@ -152,3 +153,46 @@ def cond_matches(cond, last_sample, current_sample):
                 matches = False
                 break
     return matches
+
+def run_decoders(input_, output, decoders=[], output_type=OUTPUT_ANN, output_filter=None):
+    input_.add_callback(OUTPUT_PYTHON, None, functools.partial(output.output, input_))
+
+    all_decoders = []
+    next_decoder = None
+    for decoder_info in reversed(decoders):
+        decoder_class = decoder_info["cls"]
+        decoder = decoder_class()
+        all_decoders.insert(0, decoder)
+        decoder.options = decoder_info["options"]
+
+        for decoder_id in decoder_info["pin_mapping"]:
+            channelnum = decoder_info["pin_mapping"][decoder_id]
+            decoder.set_channelnum(decoder_id, channelnum)
+
+        decoder.add_callback(output_type, output_filter, functools.partial(output.output, decoder))
+        if next_decoder:
+            decoder.add_callback(output_type, output_filter, next_decoder.decode)
+        next_decoder = decoder
+        output_type = OUTPUT_PYTHON
+        output_filter = None
+
+    if all_decoders:
+        first_decoder = all_decoders[0]
+    else:
+        first_decoder = output
+    for d in all_decoders:
+        d.reset()
+    output.reset()
+
+    if input_.samplerate > 0:
+        first_decoder.metadata(SRD_CONF_SAMPLERATE, input_.samplerate)
+
+    output.start()
+    for d in all_decoders:
+        d.start()
+
+    first_decoder.run(input_)
+
+    for d in all_decoders:
+        d.stop()
+    output.stop()

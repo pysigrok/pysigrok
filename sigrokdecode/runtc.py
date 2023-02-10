@@ -5,25 +5,29 @@ import sys
 
 from . import srzip
 from . import *
+from .output import Output
 
-class Output:
-    def __init__(self, outfile, output_type, decoder):
+class TestOutput(Output):
+    def __init__(self, outfile, output_type, decoder_class):
+        super().__init__()
         self.outfile = outfile
         self.output_type = output_type
-        self.decoder = decoder
+        self.decoder_class = decoder_class
 
-    def decode(self, startsample, endsample, data):
+    def output(self, source, startsample, endsample, data):
+        if type(source) != self.decoder_class:
+            return
         if self.output_type == OUTPUT_PYTHON:
-            self.outfile.write(f"{startsample}-{endsample} {self.decoder.id}: {data}\n")
+            self.outfile.write(f"{startsample}-{endsample} {self.decoder_class.id}: {data}\n")
 
         elif self.output_type == OUTPUT_ANN:
-            annotation = self.decoder.annotations[data[0]]
+            annotation = self.decoder_class.annotations[data[0]]
             data = " ".join(["\"" + str(x) + "\"" for x in data[1]])
-            self.outfile.write(f"{startsample}-{endsample} {self.decoder.id}: {annotation[0]}: {data}\n")
+            self.outfile.write(f"{startsample}-{endsample} {self.decoder_class.id}: {annotation[0]}: {data}\n")
 
         elif self.output_type == OUTPUT_BINARY:
             data = " ".join([f"{x:02x}" for x in data[1]])
-            self.outfile.write(f"{startsample}-{endsample} {self.decoder.id}: {data}\n")
+            self.outfile.write(f"{startsample}-{endsample} {self.decoder_class.id}: {data}\n")
 
 OUTPUT_TYPES = {
     "python": OUTPUT_PYTHON,
@@ -60,6 +64,8 @@ def main(protocol_decoder, pin_mapping, channel_option, channel_initial_value, i
     for param, value in OrderedParamsCommand._options:
         if param.name == "protocol_decoder":
             current_decoder = {"id": value, "cls": get_decoder(value), "options": {}, "pin_mapping": {}}
+            for default_option in getattr(current_decoder["cls"], "options", tuple()):
+                current_decoder["options"][default_option["id"]] = default_option["default"]
             decoders.append(current_decoder)
         elif param.name == "pin_mapping":
             decoder_id, channelnum = value.split("=")
@@ -67,11 +73,8 @@ def main(protocol_decoder, pin_mapping, channel_option, channel_initial_value, i
             current_decoder["pin_mapping"][decoder_id] = channelnum
         elif param.name == "channel_option":
             k, v = value.split("=")
-            for default_option in current_decoder["cls"].options:
-                if default_option["id"] != k:
-                    continue
-                if isinstance(default_option["default"], int):
-                    v = int(v)
+            if isinstance(current_decoder["options"][k], int):
+                v = int(v)
             current_decoder["options"][k] = v
 
     initial_values = {}
@@ -90,45 +93,9 @@ def main(protocol_decoder, pin_mapping, channel_option, channel_initial_value, i
     else:
         decoder_id, output_name, output_filter = output_format.split(":", maxsplit=2)
     output_type = OUTPUT_TYPES[output_name]
-    next_decoder = Output(f, output_type, decoders[-1]["cls"])
+    output = TestOutput(f, output_type, decoders[-1]["cls"])
 
     data = srzip.SrZipInput(input_file, initial_values)
-    all_decoders = []
-    for decoder_info in reversed(decoders):
-        decoder_class = decoder_info["cls"]
-        decoder = decoder_class()
-        all_decoders.insert(0, decoder)
-        decoder.options = decoder_info["options"]
-
-        # Set any default options that weren't on the command line.
-        if hasattr(decoder_class, "options"):
-            for option in decoder_class.options:
-                if option["id"] not in decoder.options:
-                    decoder.options[option["id"]] = option["default"]
-
-        for decoder_id in decoder_info["pin_mapping"]:
-            channelnum = decoder_info["pin_mapping"][decoder_id]
-            decoder.set_channelnum(decoder_id, channelnum)        
-
-        decoder.add_callback(output_type, output_filter, next_decoder.decode)
-        next_decoder = decoder
-        output_type = OUTPUT_PYTHON
-        output_filter = None
-
-    first_decoder = all_decoders[0]
-    first_decoder.input = data
-    for d in all_decoders:
-        d.reset()
-
-    if data.samplerate > 0:
-        first_decoder.metadata(SRD_CONF_SAMPLERATE, data.samplerate)
-
-    for d in all_decoders:
-        d.start()
-    
-    first_decoder.run(data)
-
-    for d in all_decoders:
-        d.stop()
+    run_decoders(data, output, decoders, output_type, output_filter)
 
     f.close()
