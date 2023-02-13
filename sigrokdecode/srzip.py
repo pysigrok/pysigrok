@@ -69,16 +69,22 @@ class SrZipInput(Input):
         self.unitsize = int(metadata.get("device 1", "unitsize"))
         self.typecode = TYPECODE[self.unitsize]
 
+        self.bit_mapping = []
+        self.one_to_one = True
+
 
         total_logic = int(metadata.get("device 1", "total probes", fallback="0"))
         total_analog = int(metadata.get("device 1", "total analog", fallback="0"))
         self.logic_channels = []
         self.analog_channels = []
-        for i in range(total_logic):
-            probe_name = f"probe{i + 1}"
+        for in_bit in range(total_logic):
+            probe_name = f"probe{in_bit + 1}"
             if not metadata.has_option("device 1", probe_name):
                 continue
             name = metadata.get("device 1", probe_name)
+            out_bit = len(self.logic_channels)
+            self.bit_mapping.append((in_bit, out_bit))
+            self.one_to_one = self.one_to_one and in_bit == out_bit
             self.logic_channels.append(name)
         for i in range(total_analog):
             name = metadata.get("device 1", f"analog{total_logic + i + 1}")
@@ -110,6 +116,7 @@ class SrZipInput(Input):
             self.samplenum += 1
             if self.single_file:
                 if self.samplenum >= len(self.data):
+                    self.put(self.start_samplenum, self.samplenum, OUTPUT_PYTHON, ["logic", self.last_sample])
                     raise EOFError()
                 sample = self.data[self.samplenum]
             else:
@@ -119,6 +126,7 @@ class SrZipInput(Input):
                     try:
                         self.data = self.zip.read(f"logic-1-{self._file_index:d}")
                     except KeyError:
+                        self.put(self.start_samplenum, self.samplenum, OUTPUT_PYTHON, ["logic", self.last_sample])
                         raise EOFError()
 
                     if self.unitsize > 1:
@@ -127,6 +135,13 @@ class SrZipInput(Input):
                     file_samplenum = 0
                     self._file_index += 1
                 sample = self.data[file_samplenum]
+
+            if not self.one_to_one:
+                mapped_sample = 0
+                for in_bit, out_bit in self.bit_mapping:
+                    if sample & (1 << in_bit) != 0:
+                        mapped_sample |= (1 << out_bit)
+                sample = mapped_sample
 
             if self.last_sample is None:
                 self.last_sample = sample
@@ -137,7 +152,7 @@ class SrZipInput(Input):
                 self.start_samplenum = self.samplenum
 
             if self.analog_channels:
-                self.put(self.samplenum, self.samplenum + 1, OUTPUT_PYTHON, ["analog"] + get_analog_values(self.samplenum))
+                self.put(self.samplenum, self.samplenum + 1, OUTPUT_PYTHON, ["analog"] + self.get_analog_values(self.samplenum))
 
             for i, cond in enumerate(conds):
                 if "skip" in cond:
