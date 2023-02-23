@@ -3,14 +3,19 @@ from .output import Output
 class BitsOutput(Output):
     name = "bits"
     desc = "ASCII rendering with 0/1"
-    def __init__(self, openfile, driver, logic_channels=[], analog_channels=[], *, width="64"):
+    def __init__(self, openfile, driver, logic_channels=[], analog_channels=[], decoders=[], *, width="64"):
         self.width = int(width)
         self.logic_channels = logic_channels
+        self.lines = [[c, ":"] for c in self.logic_channels]
+        self.decoders = decoders
         self.samplenum = 0
 
     def output(self, source, startsample, endsample, data):
         ptype = data[0]
         if ptype == "logic":
+            if self.decoders:
+                # Don't print logic when using a decoder
+                return
             values = []
             for b in range(len(self.logic_channels)):
                 if data[1] & (1 << b) != 0:
@@ -36,4 +41,5 @@ class BitsOutput(Output):
             pass
 
     def stop(self):
-        print("\n".join(("".join(l) for l in self.lines)))
+        if not self.decoders:
+            print("\n".join(("".join(l) for l in self.lines)))

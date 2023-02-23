@@ -190,9 +190,9 @@ CHUNK_SIZE = 4 * 1024 * 1024
 class SrZipOutput(Output):
     name = "srzip"
     desc = "srzip session file format data"
-    def __init__(self, filename, driver, logic_channels=[], analog_channels=[], annotations=[]):
+    def __init__(self, filename, driver, logic_channels=[], analog_channels=[], decoders=[]):
         super().__init__()
-        if annotations:
+        if decoders:
             raise NotImplementedError("Annotations can't be saved into .sr files.")
 
         self.zip = zipfile.ZipFile(filename, "w", compression=zipfile.ZIP_DEFLATED)

@@ -170,13 +170,7 @@ def main(
 
     output_class = output_classes[output_format_id]
 
-    output = output_class(
-        f,
-        driver,
-        logic_channels=driver.logic_channels,
-        analog_channels=driver.analog_channels,
-        **output_options,
-    )
+
 
     if not protocol_decoders:
         protocol_decoders = []
@@ -199,7 +193,12 @@ def main(
 
         pin_mapping = {}
         for unparsed_option in unparsed_options.split(":"):
-            k, v = unparsed_option.split("=")
+            if "=" in unparsed_option:
+                k, v = unparsed_option.split("=")
+            else:
+                k = unparsed_option
+                v = "true"
+            
             if k in options:
                 if isinstance(options[k], int):
                     v = int(v)
@@ -213,6 +212,19 @@ def main(
                             channelnum = driver.logic_channels.index(v)
                         pin_mapping[k] = channelnum
 
+        # Assume one to one mapping when required channels are omitted.
+        for i, channel in enumerate(getattr(pd_class, "channels", tuple())):
+            if channel["id"] not in pin_mapping:
+                pin_mapping[channel["id"]] = i
+
         decoders.append({"id": pd_id, "cls": pd_class, "options": options, "pin_mapping": pin_mapping})
 
+    output = output_class(
+        f,
+        driver,
+        logic_channels=driver.logic_channels,
+        analog_channels=driver.analog_channels,
+        decoders=decoders,
+        **output_options,
+    )
     run_decoders(driver, output, decoders)

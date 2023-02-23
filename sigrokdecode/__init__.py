@@ -7,7 +7,7 @@ else:
     from importlib.metadata import entry_points
 import functools
 
-__version__ = "0.4.1"
+__version__ = "0.4.2"
 
 class OutputType(Enum):
     SRD_OUTPUT_ANN = 0
