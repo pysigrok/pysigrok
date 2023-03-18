@@ -1,4 +1,6 @@
 """Super class for output formats that make them look like decoders."""
+from sigrokdecode import OutputType, DataType, OUTPUT_ANN, OUTPUT_BINARY
+
 
 class Input:
     def __init__(self):
@@ -10,7 +12,18 @@ class Input:
 
         self.callbacks[output_type].add((output_filter, fun))
 
-    def put(self, startsample, endsample, output_id, data):
+    def put(self, startsample: int, endsample: int, output_id: OutputType, data: DataType) -> None:
+        """
+        This is used to provide the decoded data back into the backend
+
+        :param startsample: absolute sample number of where this item (e.g. an
+            annotation) starts
+        :param endsample: absolute sample number of where this item (e.g. an annotation)
+            ends
+        :param output_id:
+        :param data: contents depend on the output type
+        :return: None
+        """
         # print(startsample, endsample, output_id, data)
         if not output_id in self.callbacks:
             return
