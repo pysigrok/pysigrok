@@ -2,8 +2,10 @@ import array
 import zipfile
 import configparser
 import struct
-import pathlib
 import io
+from os import PathLike
+from typing import Union
+from typing.io import IO
 
 from .output import Output
 from .input import Input
@@ -30,9 +32,9 @@ UNITS = {
 class SrZipInput(Input):
     name = "srzip"
     desc = "srzip session file format data"
-    def __init__(self, filename, initial_state=None):
+    def __init__(self, file: Union[str, PathLike[str], IO[bytes]], initial_state=None):
         super().__init__()
-        self.zip = zipfile.ZipFile(filename)
+        self.zip = zipfile.ZipFile(file)
         # self.zip.printdir()
         metadata = configparser.ConfigParser()
         self.version = int(self.zip.read("version").decode("ascii"))
@@ -190,12 +192,12 @@ CHUNK_SIZE = 4 * 1024 * 1024
 class SrZipOutput(Output):
     name = "srzip"
     desc = "srzip session file format data"
-    def __init__(self, filename, driver, logic_channels=[], analog_channels=[], decoders=[]):
+    def __init__(self, file: Union[str, PathLike[str], IO[bytes]], driver, logic_channels=[], analog_channels=[], decoders=[]):
         super().__init__()
         if decoders:
             raise NotImplementedError("Annotations can't be saved into .sr files.")
 
-        self.zip = zipfile.ZipFile(filename, "w", compression=zipfile.ZIP_DEFLATED)
+        self.zip = zipfile.ZipFile(file, "w", compression=zipfile.ZIP_DEFLATED)
 
         self.zip.writestr("version", "2")
         metadata = configparser.ConfigParser()

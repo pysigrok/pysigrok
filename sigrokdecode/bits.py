@@ -10,7 +10,7 @@ class BitsOutput(Output):
         self.decoders = decoders
         self.samplenum = 0
 
-    def output(self, source, startsample, endsample, data):
+    def output(self, source, startsample: int, endsample: int, data):
         ptype = data[0]
         if ptype == "logic":
             if self.decoders:
