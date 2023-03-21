@@ -6,9 +6,5 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-      - name: Install Just
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to "$HOME/.local/bin"
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
       - name: Run linting and type checking
-        run: just lint
+        run: ./scripts/lint.sh
