@@ -2,8 +2,7 @@ import click
 
 import sys
 
-from . import srzip
-from . import *
+from . import srzip, OutputType, get_decoder, run_decoders
 from .output import Output
 
 
@@ -17,19 +16,20 @@ class TestOutput(Output):
     def output(self, source, startsample, endsample, data):
         if type(source) != self.decoder_class:
             return
-        if self.output_type == OUTPUT_PYTHON:
+        if self.output_type == OutputType.PYTHON:
             self.outfile.write(
                 f"{startsample}-{endsample} {self.decoder_class.id}: {data}\n"
             )
 
-        elif self.output_type == OUTPUT_ANN:
+        elif self.output_type == OutputType.ANN:
             annotation = self.decoder_class.annotations[data[0]]
             data = " ".join(['"' + str(x) + '"' for x in data[1]])
             self.outfile.write(
-                f"{startsample}-{endsample} {self.decoder_class.id}: {annotation[0]}: {data}\n"
+                f"{startsample}-{endsample} {self.decoder_class.id}: "
+                f"{annotation[0]}: {data}\n"
             )
 
-        elif self.output_type == OUTPUT_BINARY:
+        elif self.output_type == OutputType.BINARY:
             data = " ".join([f"{x:02x}" for x in data[1]])
             self.outfile.write(
                 f"{startsample}-{endsample} {self.decoder_class.id}: {data}\n"
@@ -37,10 +37,10 @@ class TestOutput(Output):
 
 
 OUTPUT_TYPES = {
-    "python": OUTPUT_PYTHON,
-    "exception": OUTPUT_PYTHON,
-    "annotation": OUTPUT_ANN,
-    "binary": OUTPUT_BINARY,
+    "python": OutputType.PYTHON,
+    "exception": OutputType.PYTHON,
+    "annotation": OutputType.ANN,
+    "binary": OutputType.BINARY,
 }
 
 

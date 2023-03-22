@@ -13,23 +13,25 @@ __version__ = "0.4.2"
 
 
 class OutputType(Enum):
-    SRD_OUTPUT_ANN = 0
-    SRD_OUTPUT_PYTHON = 1
-    SRD_OUTPUT_BINARY = 2
-    SRD_OUTPUT_LOGIC = 3
-    SRD_OUTPUT_META = 4
-
-
-OUTPUT_ANN = OutputType.SRD_OUTPUT_ANN
-OUTPUT_PYTHON = OutputType.SRD_OUTPUT_PYTHON
-OUTPUT_BINARY = OutputType.SRD_OUTPUT_BINARY
-OUTPUT_LOGIC = OutputType.SRD_OUTPUT_LOGIC
-OUTPUT_META = OutputType.SRD_OUTPUT_META
+    ANN = 0
+    PYTHON = 1
+    BINARY = 2
+    LOGIC = 3
+    META = 4
 
 
 class MetadataKeys(Enum):
-    SRD_CONF_SAMPLERATE = 1
+    CONF_SAMPLERATE = 1
 
+
+# define at top-level for backwards compatibility with the official sigrokdecode api
+SRD_CONF_SAMPLERATE = MetadataKeys.CONF_SAMPLERATE
+
+OUTPUT_ANN = OutputType.ANN
+OUTPUT_PYTHON = OutputType.PYTHON
+OUTPUT_BINARY = OutputType.BINARY
+OUTPUT_LOGIC = OutputType.LOGIC
+OUTPUT_META = OutputType.META
 
 DataTypeAnn = typing.Tuple[int, typing.List[str]]
 DataTypePython = typing.Any

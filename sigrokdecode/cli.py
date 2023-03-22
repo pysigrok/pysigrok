@@ -50,7 +50,8 @@ for decoder in decoders:
 @click.option(
     "-P",
     "--protocol-decoders",
-    help="comma separated list of protocol decoders to run. Options are colon separated.",
+    help="comma separated list of protocol decoders to run. Options are colon "
+    "separated.",
 )
 @click.option("--time", "sample_time")
 @click.option("--samples", type=int)
