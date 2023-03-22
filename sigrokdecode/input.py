@@ -12,7 +12,9 @@ class Input:
 
         self.callbacks[output_type].add((output_filter, fun))
 
-    def put(self, startsample: int, endsample: int, output_id: OutputType, data: DataType) -> None:
+    def put(
+        self, startsample: int, endsample: int, output_id: OutputType, data: DataType
+    ) -> None:
         """
         This is used to provide the decoded data back into the backend
 
@@ -25,7 +27,7 @@ class Input:
         :return: None
         """
         # print(startsample, endsample, output_id, data)
-        if not output_id in self.callbacks:
+        if output_id not in self.callbacks:
             return
         for output_filter, cb in self.callbacks[output_id]:
             if output_filter is not None:

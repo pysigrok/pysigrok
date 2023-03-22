@@ -1,9 +1,20 @@
 from .output import Output
 
+
 class BitsOutput(Output):
     name = "bits"
     desc = "ASCII rendering with 0/1"
-    def __init__(self, openfile, driver, logic_channels=[], analog_channels=[], decoders=[], *, width="64"):
+
+    def __init__(
+        self,
+        openfile,
+        driver,
+        logic_channels=[],
+        analog_channels=[],
+        decoders=[],
+        *,
+        width="64",
+    ):
         self.width = int(width)
         self.logic_channels = logic_channels
         self.lines = [[c, ":"] for c in self.logic_channels]

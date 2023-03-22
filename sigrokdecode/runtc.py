@@ -1,11 +1,11 @@
 import click
 
-import functools
 import sys
 
 from . import srzip
 from . import *
 from .output import Output
+
 
 class TestOutput(Output):
     def __init__(self, outfile, output_type, decoder_class):
@@ -18,16 +18,23 @@ class TestOutput(Output):
         if type(source) != self.decoder_class:
             return
         if self.output_type == OUTPUT_PYTHON:
-            self.outfile.write(f"{startsample}-{endsample} {self.decoder_class.id}: {data}\n")
+            self.outfile.write(
+                f"{startsample}-{endsample} {self.decoder_class.id}: {data}\n"
+            )
 
         elif self.output_type == OUTPUT_ANN:
             annotation = self.decoder_class.annotations[data[0]]
-            data = " ".join(["\"" + str(x) + "\"" for x in data[1]])
-            self.outfile.write(f"{startsample}-{endsample} {self.decoder_class.id}: {annotation[0]}: {data}\n")
+            data = " ".join(['"' + str(x) + '"' for x in data[1]])
+            self.outfile.write(
+                f"{startsample}-{endsample} {self.decoder_class.id}: {annotation[0]}: {data}\n"
+            )
 
         elif self.output_type == OUTPUT_BINARY:
             data = " ".join([f"{x:02x}" for x in data[1]])
-            self.outfile.write(f"{startsample}-{endsample} {self.decoder_class.id}: {data}\n")
+            self.outfile.write(
+                f"{startsample}-{endsample} {self.decoder_class.id}: {data}\n"
+            )
+
 
 OUTPUT_TYPES = {
     "python": OUTPUT_PYTHON,
@@ -35,6 +42,7 @@ OUTPUT_TYPES = {
     "annotation": OUTPUT_ANN,
     "binary": OUTPUT_BINARY,
 }
+
 
 class OrderedParamsCommand(click.Command):
     _options = []
@@ -50,22 +58,40 @@ class OrderedParamsCommand(click.Command):
 
         return super().parse_args(ctx, args)
 
+
 @click.command(cls=OrderedParamsCommand)
-@click.option('-P', "--protocol-decoder", multiple=True)
+@click.option("-P", "--protocol-decoder", multiple=True)
 @click.option("-p", "--pin-mapping", multiple=True, help="channelname=channelnum")
 @click.option("-o", "--channel-option", multiple=True, help="channeloption=value")
-@click.option("-N", "--channel-initial-value", multiple=True, help="channelname=initial-pin-value")
+@click.option(
+    "-N", "--channel-initial-value", multiple=True, help="channelname=initial-pin-value"
+)
 @click.option("-i", "--input-file")
 @click.option("-O", "--output-format")
 @click.option("-f", "--output-file")
-def main(protocol_decoder, pin_mapping, channel_option, channel_initial_value, input_file, output_format, output_file):
+def main(
+    protocol_decoder,
+    pin_mapping,
+    channel_option,
+    channel_initial_value,
+    input_file,
+    output_format,
+    output_file,
+):
     decoders = []
     current_decoder = None
     for param, value in OrderedParamsCommand._options:
         if param.name == "protocol_decoder":
-            current_decoder = {"id": value, "cls": get_decoder(value), "options": {}, "pin_mapping": {}}
+            current_decoder = {
+                "id": value,
+                "cls": get_decoder(value),
+                "options": {},
+                "pin_mapping": {},
+            }
             for default_option in getattr(current_decoder["cls"], "options", tuple()):
-                current_decoder["options"][default_option["id"]] = default_option["default"]
+                current_decoder["options"][default_option["id"]] = default_option[
+                    "default"
+                ]
             decoders.append(current_decoder)
         elif param.name == "pin_mapping":
             decoder_id, channelnum = value.split("=")
