@@ -14,11 +14,21 @@ dependencies = [
     "importlib-metadata < 7"
 ]
 
+[project.optional-dependencies]
+dev = [
+    "black == 23.1.0",
+    "pyright == 1.1.299",
+    "ruff == 0.0.256",
+    "pre_commit == 3.2.0"
+]
+
 [project.urls]
 Home = "https://github.com/pysigrok/pysigrok"
 
 [tool.flit.module]
 name = "sigrokdecode"
+
+[tool.pyright]
 
 [project.scripts]
 pysigrok-cli = "sigrokdecode.cli:main"

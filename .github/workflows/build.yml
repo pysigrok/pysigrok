@@ -1,0 +1,10 @@
+name: Python Linting and Type Checking
+on: [ push, pull_request ]
+jobs:
+  lint_and_type_check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Run linting and type checking
+        run: ./scripts/lint.sh

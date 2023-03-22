@@ -142,7 +142,7 @@ The capture driver must implement:
 class SkeletonDriver(Input):
     name = "short name used for id"
     longname = "Human readable name"
-    
+
     def __init__(self, channellist):
         self.samplenum
         self.matched
@@ -150,7 +150,7 @@ class SkeletonDriver(Input):
 
     def acquire(self, sample_count, triggers, pretrigger_data):
         ...
-        
+
     def wait(self, conds=None):
         ...
 ```
@@ -167,7 +167,7 @@ File inputs are used to run existing data through protocol decoders and then out
 class SkeletonInput(Input):
     name = "short name used for id"
     desc = "Human readable description"
-    
+
     def __init__(self, filename, initial_state=None):
         self.samplenum
         self.matched
@@ -198,13 +198,13 @@ File outputs are used to write a particular format to a given file which may be 
 class SkeletonOutput(Input):
     name = "short name used for id"
     desc = "Human readable description"
-    
+
     def __init__(self, openfile, driver, logic_channels=[], analog_channels=[]):
         ...
 
     def output(self, source, startsample, endsample, data):
         ...
-        
+
     def stop(self):
         ...
 ```
@@ -213,3 +213,14 @@ Outputs receive all OUTPUT_PYTHON events from the driver/input and any OUTPUT_AN
 
 
 Outputs have `reset()`, `start()`, `output()` and `stop()` functions to hook into the decode lifecycle.
+
+## Contributing
+
+Setting up the development environment:
+
+```console
+$ virtualenv -p python3 venv
+$ source venv/bin/activate
+venv$ pip install -e .[dev]
+venv$ pre-commit install
+```
