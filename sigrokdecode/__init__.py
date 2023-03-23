@@ -1,7 +1,22 @@
 """Python implementation of sigrok tools"""
-import typing
+import abc
+from typing import (
+    Optional,
+    overload,
+    List,
+    Set,
+    Tuple,
+    Any,
+    Callable,
+    Sequence,
+    Dict,
+    Union,
+    TypedDict,
+)
 from enum import Enum
 import sys
+
+from sigrokdecode.input import Input
 
 if sys.version_info < (3, 10):
     from importlib_metadata import entry_points
@@ -33,13 +48,13 @@ OUTPUT_BINARY = OutputType.BINARY
 OUTPUT_LOGIC = OutputType.LOGIC
 OUTPUT_META = OutputType.META
 
-DataTypeAnn = typing.Tuple[int, typing.List[str]]
-DataTypePython = typing.Any
-DataTypeBinary = typing.Tuple[int, typing.List[bytes]]
-DataTypeLogic = typing.Tuple[int, bytes]
-DataTypeMeta = typing.Any
+DataTypeAnn = Tuple[int, List[str]]
+DataTypePython = Any
+DataTypeBinary = Tuple[int, List[bytes]]
+DataTypeLogic = Tuple[int, bytes]
+DataTypeMeta = Any
 
-DataType = typing.Union[
+DataType = Union[
     DataTypeAnn,
     DataTypePython,
     DataTypeBinary,
@@ -56,8 +71,44 @@ def SR_MHZ(num):
     return SR_KHZ(num) * 1000
 
 
-class Decoder:
+class DecoderChannels(TypedDict):
+    id: str
+    name: str
+    desc: str
+
+
+class DecoderOptions(TypedDict):
+    id: str
+    desc: str
+    default: str
+    values: Tuple[str, ...]
+
+
+class Decoder(abc.ABC):
     # __init__() won't get called by subclasses
+    api_version: int
+    id: str
+    name: str
+    longname: str
+    desc: str
+    license: str
+    inputs: Sequence[str]
+    outputs: Sequence[str]
+    channels: Sequence[DecoderChannels]
+    optional_channels: Optional[Sequence[DecoderChannels]] = None
+    options: Optional[Tuple[DecoderOptions, ...]] = None
+    annotations: Optional[Sequence[Tuple[str, str]]] = None
+    annotation_rows: Optional[Sequence[Tuple[str, str, Tuple[int, ...]]]] = None
+    binary: Optional[Sequence[Tuple[str, str]]] = None
+    tags: Optional[Sequence[str]] = None
+
+    decoder_channel_to_data_channel: Dict[int, int] = {}
+    one_to_one: bool = False
+    input: Optional[Input] = None
+    callbacks: Dict[
+        OutputType,
+        Set[Tuple[Any, Callable[[int, int, DataType], None]]],
+    ] = {}
 
     def register(self, output_type: OutputType, proto_id=None, meta=None) -> OutputType:
         """
@@ -74,7 +125,7 @@ class Decoder:
         # print("register", output_type, meta)
         return output_type
 
-    def metadata(self, key: MetadataKeys, value: typing.Any) -> None:
+    def metadata(self, key: MetadataKeys, value: Any) -> None:
         """
         Used to pass the decoder metadata about the data stream. Currently, the only
         value for key is sigrokdecode.SRD_CONF_SAMPLERATE, value is then the sample
@@ -98,7 +149,7 @@ class Decoder:
         self.callbacks[output_type].add((output_filter, fun))
 
     def wait(self, conds=[]):
-        assert hasattr(self, "input")
+        assert self.input is not None, "Decoder not initialized"
         if isinstance(conds, dict):
             conds = [conds]
         if self.one_to_one:
@@ -133,10 +184,14 @@ class Decoder:
         for output_filter, cb in self.callbacks[output_id]:
             if output_filter is not None:
                 if output_id == OUTPUT_ANN:
+                    assert (
+                        self.annotations is not None
+                    ), "Decoder does not support annotations."
                     annotation = self.annotations[data[0]]
                     if annotation[0] != output_filter:
                         continue
                 elif output_id == OUTPUT_BINARY:
+                    assert self.binary is not None, "Decoder does not support binary"
                     track = self.binary[data[0]]
                     if track[0] != output_filter:
                         continue
@@ -147,11 +202,16 @@ class Decoder:
             self.decoder_channel_to_data_channel = {}
             self.one_to_one = True
 
-        if not hasattr(type(self), "optional_channels"):
-            type(self).optional_channels = tuple()
-        if not hasattr(type(self), "channels"):
-            type(self).channels = tuple()
-        for i, c in enumerate(type(self).channels + type(self).optional_channels):
+        self_class = type(self)
+
+        optional_channels = (
+            list()
+            if self_class.optional_channels is None
+            else list(self_class.optional_channels)
+        )
+        channels = list() if self_class.channels is None else list(self_class.channels)
+
+        for i, c in enumerate(channels + optional_channels):
             if c["id"] == channelname:
                 self.decoder_channel_to_data_channel[i] = channelnum
                 self.one_to_one = self.one_to_one and i == channelnum
@@ -161,14 +221,54 @@ class Decoder:
         return decoder_channel in self.decoder_channel_to_data_channel
 
     @property
-    def samplenum(self):
+    def samplenum(self) -> Optional[int]:
+        """must be called after wait() to be non-None"""
+        assert self.input is not None
         return self.input.samplenum
 
     @property
-    def matched(self):
+    def matched(self) -> Optional[List[bool]]:
+        """must be called after wait() to be non-None"""
+        assert self.input is not None
         return self.input.matched
 
-    def run(self, input_):
+    @overload
+    @abc.abstractmethod
+    def decode(self) -> None:
+        """
+        In non-stacked decoders, this function is called by the libsigrokdecode
+        backend to start the decoding.
+
+        It takes no arguments, but instead will enter an infinite loop and gets
+        samples by calling the more versatile wait() method. This frees specific
+        protocol decoders from tedious yet common tasks like detecting edges,
+        or sampling signals at specific points in time relative to the current position.
+
+        Note: This decode(self) method's signature has been introduced in version 3
+        of the protocol decoder API, in previous versions only decode(self,
+        startsample, endsample, data) was available.
+        """
+        ...
+
+    @overload
+    @abc.abstractmethod
+    def decode(self, startsample: int, endsample: int, data: DataType) -> None:
+        """
+        In stacked decoders, this is a function that is called by the libsigrokdecode
+        backend whenever it has a chunk of data for the protocol decoder to handle.
+        """
+        ...
+
+    @abc.abstractmethod
+    def decode(
+        self,
+        startsample: Optional[int] = None,
+        endsample: Optional[int] = None,
+        data: Optional[DataType] = None,
+    ) -> None:
+        ...
+
+    def run(self, input_: Input):
         self.input = input_
         try:
             self.decode()
