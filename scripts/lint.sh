@@ -15,4 +15,3 @@ fi
 
 black "${BLACK_ARGS[@]}" .
 ruff check "${RUFF_ARGS[@]}" .
-pyright

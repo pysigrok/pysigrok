@@ -224,3 +224,11 @@ $ source venv/bin/activate
 venv$ pip install -e .[dev]
 venv$ pre-commit install
 ```
+
+### Type checking
+
+This project uses `pyright` for type checking, but does not enforce it at the moment. To run type checking:
+
+```console
+venv$ pyright
+```
