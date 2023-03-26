@@ -2,10 +2,6 @@
 
 
 class Output:
-    name: str
-    longname: str
-    desc: str = ""
-
     def reset(self):
         pass
 

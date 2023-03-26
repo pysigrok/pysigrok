@@ -1,73 +1,38 @@
-from typing import Type, Optional, Dict, ItemsView
 import click
 import pathlib
 from serial.tools import list_ports
 import sys
 
-from . import run_decoders, Decoder, Input
-from .output import Output
+from . import run_decoders
 
 if sys.version_info < (3, 10):
     from importlib_metadata import entry_points
 else:
     from importlib.metadata import entry_points
 
-driver_classes: Dict[str, Type[Input]] = {}
-input_classes: Dict[str, Type[Input]] = {}
-output_classes: Dict[str, Type[Output]] = {}
-decoder_classes: Dict[str, Type[Decoder]] = {}
+drivers = entry_points(group="pysigrok.hardware")
+driver_classes = {}
+for hw in drivers:
+    loaded = hw.load()
+    driver_classes[loaded.name] = loaded
 
+input_formats = entry_points(group="pysigrok.input_format")
+input_classes = {}
+for f in input_formats:
+    loaded = f.load()
+    input_classes[loaded.name] = loaded
 
-def _load_classes() -> None:
-    # function for scope reasons
-    drivers = entry_points(group="pysigrok.hardware")
-    for hw in drivers:
-        loaded = hw.load()
-        driver_classes[loaded.name] = loaded
+output_formats = entry_points(group="pysigrok.output_format")
+output_classes = {}
+for f in output_formats:
+    loaded = f.load()
+    output_classes[loaded.name] = loaded
 
-    input_formats = entry_points(group="pysigrok.input_format")
-    for f in input_formats:
-        loaded = f.load()
-        input_classes[loaded.name] = loaded
-
-    output_formats = entry_points(group="pysigrok.output_format")
-    for f in output_formats:
-        loaded = f.load()
-        output_classes[loaded.name] = loaded
-
-    decoders = entry_points(group="pysigrok.decoders")
-    for decoder in decoders:
-        loaded = decoder.load()
-        decoder_classes[loaded.id] = loaded
-
-
-_load_classes()
-
-
-def do_list_supported() -> None:
-    print("Supported hardware drivers:")
-    for driver_id, driver_class in driver_classes.items():
-        print(f"  {driver_id}\t{driver_class.longname}")
-    print()
-    print("Supported input formats:")
-    for input_format_id, input_class in input_classes.items():
-        print(f"  {input_format_id}\t{input_class.desc}")
-    print()
-    print("Supported output formats:")
-    for output_format_id, output_class in output_classes.items():
-        print(f"  {output_format_id}\t{output_class.desc}")
-    print()
-    print("Supported transform modules:")
-    print()
-    print("Supported protocol decoders:")
-    for pd, decoder_class in decoder_classes.items():
-        print(f"  {pd}\t{decoder_class.longname}")
-
-
-def do_list_serial() -> None:
-    print("Available serial ports:")
-    for port in list_ports.comports():
-        print(" ", port)
+decoders = entry_points(group="pysigrok.decoders")
+decoder_classes = {}
+for decoder in decoders:
+    loaded = decoder.load()
+    decoder_classes[loaded.id] = loaded
 
 
 @click.command()
@@ -111,9 +76,33 @@ def main(
     continuous,
 ):
     if list_supported:
-        return do_list_supported()
+        print("Supported hardware drivers:")
+        for driver_id in driver_classes:
+            driver_class = driver_classes[driver_id]
+            print(f"  {driver_id}\t{driver_class.longname}")
+        print()
+        print("Supported input formats:")
+        for input_format_id in input_classes:
+            input_class = input_classes[input_format_id]
+            print(f"  {input_format_id}\t{input_class.desc}")
+        print()
+        print("Supported output formats:")
+        for output_format_id in output_classes:
+            output_class = output_classes[output_format_id]
+            print(f"  {output_format_id}\t{output_class.desc}")
+        print()
+        print("Supported transform modules:")
+        print()
+        print("Supported protocol decoders:")
+        for pd in decoder_classes:
+            decoder_class = decoder_classes[pd]
+            print(f"  {pd}\t{decoder_class.longname}")
+        return
     elif list_serial:
-        return do_list_serial()
+        print("Available serial ports:")
+        for port in list_ports.comports():
+            print(" ", port)
+        return
 
     if driver:
         driver_options = {}
@@ -128,7 +117,13 @@ def main(
                 k, v = config.split("=", maxsplit=1)
                 driver_configs[k] = v
 
-        driver = driver_classes[driver](channels, **driver_options, **driver_configs)
+        driver_class = None
+        for hw in drivers:
+            loaded = hw.load()
+            if loaded.name == driver:
+                driver_class = loaded
+
+        driver = driver_class(channels, **driver_options, **driver_configs)
 
         if samples:
             if not triggers:
@@ -196,7 +191,7 @@ def main(
 
         pd_class = decoder_classes[pd_id]
         options = {}
-        for default_option in pd_class.options or []:
+        for default_option in pd_class.options:
             options[default_option["id"]] = default_option["default"]
 
         pin_mapping = {}
