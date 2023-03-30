@@ -47,7 +47,12 @@ for decoder in decoders:
 @click.option("-C", "--channels", help="comma separated list of channels to capture")
 @click.option("-t", "--triggers", help="comma separated list of triggers")
 @click.option("-w", "--wait-trigger", is_flag=True, default=False)
-@click.option("-P", "--protocol-decoders", help="comma separated list of protocol decoders to run. Options are colon separated.")
+@click.option(
+    "-P",
+    "--protocol-decoders",
+    help="comma separated list of protocol decoders to run. Options are colon "
+    "separated.",
+)
 @click.option("--time", "sample_time")
 @click.option("--samples", type=int)
 @click.option("--frames")
@@ -170,8 +175,6 @@ def main(
 
     output_class = output_classes[output_format_id]
 
-
-
     if not protocol_decoders:
         protocol_decoders = []
     elif "," not in protocol_decoders:
@@ -198,13 +201,15 @@ def main(
             else:
                 k = unparsed_option
                 v = "true"
-            
+
             if k in options:
                 if isinstance(options[k], int):
                     v = int(v)
                 options[k] = v
             else:
-                for channel in getattr(pd_class, "channels", tuple()) + getattr(pd_class, "optional_channels", tuple()):
+                for channel in getattr(pd_class, "channels", tuple()) + getattr(
+                    pd_class, "optional_channels", tuple()
+                ):
                     if channel["id"] == k:
                         try:
                             channelnum = int(v)
@@ -217,7 +222,14 @@ def main(
             if channel["id"] not in pin_mapping:
                 pin_mapping[channel["id"]] = i
 
-        decoders.append({"id": pd_id, "cls": pd_class, "options": options, "pin_mapping": pin_mapping})
+        decoders.append(
+            {
+                "id": pd_id,
+                "cls": pd_class,
+                "options": options,
+                "pin_mapping": pin_mapping,
+            }
+        )
 
     output = output_class(
         f,

@@ -1,9 +1,20 @@
 from .output import Output
 
+
 class BitsOutput(Output):
     name = "bits"
     desc = "ASCII rendering with 0/1"
-    def __init__(self, openfile, driver, logic_channels=[], analog_channels=[], decoders=[], *, width="64"):
+
+    def __init__(
+        self,
+        openfile,
+        driver,
+        logic_channels=[],
+        analog_channels=[],
+        decoders=[],
+        *,
+        width="64",
+    ):
         self.width = int(width)
         self.logic_channels = logic_channels
         self.lines = [[c, ":"] for c in self.logic_channels]
@@ -25,7 +36,7 @@ class BitsOutput(Output):
             for s in range(startsample, endsample):
                 if s % self.width == 0:
                     if s > 1:
-                        print("\n".join(("".join(l) for l in self.lines)))
+                        print("\n".join(("".join(line) for line in self.lines)))
                     self.lines = [[c, ":"] for c in self.logic_channels]
                 for bit in range(len(self.logic_channels)):
                     self.lines[bit].append(values[bit])
@@ -42,4 +53,4 @@ class BitsOutput(Output):
 
     def stop(self):
         if not self.decoders:
-            print("\n".join(("".join(l) for l in self.lines)))
+            print("\n".join(("".join(line) for line in self.lines)))

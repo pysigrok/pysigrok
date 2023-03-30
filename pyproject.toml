@@ -11,7 +11,8 @@ dynamic = ["version", "description"]
 requires-python = ">=3.7"
 dependencies = [
     "click < 9",
-    "importlib-metadata < 7"
+    "importlib-metadata < 7",
+    "pyserial < 4",
 ]
 
 [project.optional-dependencies]
@@ -19,7 +20,7 @@ dev = [
     "black == 23.1.0",
     "pyright == 1.1.299",
     "ruff == 0.0.256",
-    "pre_commit == 3.2.0"
+    "pre_commit <= 2.21.0" # python 3.7 support
 ]
 
 [project.urls]

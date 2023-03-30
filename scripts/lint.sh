@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
 
@@ -6,13 +6,12 @@ cd "$(dirname "$0")/.."
 
 # if --fix is passed, set flags
 if [ "$1" = "--fix" ]; then
-  BLACK_ARGS=""
-  RUFF_ARGS="--fix"
+  BLACK_ARGS=()
+  RUFF_ARGS=("--fix")
 else
-  BLACK_ARGS="--check"
-  RUFF_ARGS=""
+  BLACK_ARGS=("--check")
+  RUFF_ARGS=()
 fi
 
-black "$BLACK_ARGS" .
-ruff check "$RUFF_ARGS" .
-pyright
+black "${BLACK_ARGS[@]}" .
+ruff check "${RUFF_ARGS[@]}" .

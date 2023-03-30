@@ -2,6 +2,7 @@
 import typing
 from enum import Enum
 import sys
+
 if sys.version_info < (3, 10):
     from importlib_metadata import entry_points
 else:
@@ -10,21 +11,27 @@ import functools
 
 __version__ = "0.4.2"
 
-class OutputType(Enum):
-    SRD_OUTPUT_ANN = 0
-    SRD_OUTPUT_PYTHON = 1
-    SRD_OUTPUT_BINARY = 2
-    SRD_OUTPUT_LOGIC = 3
-    SRD_OUTPUT_META = 4
 
-OUTPUT_ANN = OutputType.SRD_OUTPUT_ANN
-OUTPUT_PYTHON = OutputType.SRD_OUTPUT_PYTHON
-OUTPUT_BINARY = OutputType.SRD_OUTPUT_BINARY
-OUTPUT_LOGIC = OutputType.SRD_OUTPUT_LOGIC
-OUTPUT_META = OutputType.SRD_OUTPUT_META
+class OutputType(Enum):
+    ANN = 0
+    PYTHON = 1
+    BINARY = 2
+    LOGIC = 3
+    META = 4
+
 
 class MetadataKeys(Enum):
-    SRD_CONF_SAMPLERATE = 1
+    CONF_SAMPLERATE = 1
+
+
+# define at top-level for backwards compatibility with the official sigrokdecode api
+SRD_CONF_SAMPLERATE = MetadataKeys.CONF_SAMPLERATE
+
+OUTPUT_ANN = OutputType.ANN
+OUTPUT_PYTHON = OutputType.PYTHON
+OUTPUT_BINARY = OutputType.BINARY
+OUTPUT_LOGIC = OutputType.LOGIC
+OUTPUT_META = OutputType.META
 
 DataTypeAnn = typing.Tuple[int, typing.List[str]]
 DataTypePython = typing.Any
@@ -44,8 +51,10 @@ DataType = typing.Union[
 def SR_KHZ(num):
     return num * 1000
 
+
 def SR_MHZ(num):
     return SR_KHZ(num) * 1000
+
 
 class Decoder:
     # __init__() won't get called by subclasses
@@ -89,7 +98,7 @@ class Decoder:
         self.callbacks[output_type].add((output_filter, fun))
 
     def wait(self, conds=[]):
-        assert(hasattr(self, "input"))
+        assert hasattr(self, "input")
         if isinstance(conds, dict):
             conds = [conds]
         if self.one_to_one:
@@ -106,16 +115,20 @@ class Decoder:
                 data_conds.append(data_cond)
 
         raw_data = self.input.wait(data_conds)
-        data = [None] * (len(type(self).channels) + len(getattr(type(self), "optional_channels", [])))
+        data = [None] * (
+            len(type(self).channels) + len(getattr(type(self), "optional_channels", []))
+        )
         for decoder_channel in self.decoder_channel_to_data_channel:
             data_channel = self.decoder_channel_to_data_channel[decoder_channel]
             data[decoder_channel] = raw_data[data_channel]
 
         return tuple(data)
 
-    def put(self, startsample: int, endsample: int, output_id: OutputType, data: DataType) -> None:
+    def put(
+        self, startsample: int, endsample: int, output_id: OutputType, data: DataType
+    ) -> None:
         # print(startsample, endsample, output_id, data)
-        if not output_id in self.callbacks:
+        if output_id not in self.callbacks:
             return
         for output_filter, cb in self.callbacks[output_id]:
             if output_filter is not None:
@@ -165,11 +178,14 @@ class Decoder:
     def stop(self):
         pass
 
+
 def get_decoder(decoder_id):
-    discovered_plugins = entry_points(name=decoder_id, group='pysigrok.decoders')
+    discovered_plugins = entry_points(name=decoder_id, group="pysigrok.decoders")
     if len(discovered_plugins) == 1:
         return discovered_plugins[0].load()
-    raise RuntimeError("Decoder id ambiguous:" + ",".join([p.name for p in discovered_plugins]))
+    raise RuntimeError(
+        "Decoder id ambiguous:" + ",".join([p.name for p in discovered_plugins])
+    )
 
 
 def cond_matches(cond, last_sample, current_sample):
@@ -181,17 +197,22 @@ def cond_matches(cond, last_sample, current_sample):
         mask = 1 << channel
         last_value = last_sample & mask
         value = current_sample & mask
-        if ((state == "l" and value != 0) or
-            (state == "h" and value == 0) or
-            (state == "r" and not (last_value == 0 and value != 0)) or
-            (state == "f" and not (last_value != 0 and value == 0)) or
-            (state == "e" and last_value == value) or
-            (state == "s" and last_value != value)):
-                matches = False
-                break
+        if (
+            (state == "l" and value != 0)
+            or (state == "h" and value == 0)
+            or (state == "r" and not (last_value == 0 and value != 0))
+            or (state == "f" and not (last_value != 0 and value == 0))
+            or (state == "e" and last_value == value)
+            or (state == "s" and last_value != value)
+        ):
+            matches = False
+            break
     return matches
 
-def run_decoders(input_, output, decoders=[], output_type=OUTPUT_ANN, output_filter=None):
+
+def run_decoders(
+    input_, output, decoders=[], output_type=OUTPUT_ANN, output_filter=None
+):
     input_.add_callback(OUTPUT_PYTHON, None, functools.partial(output.output, input_))
 
     all_decoders = []
@@ -206,7 +227,9 @@ def run_decoders(input_, output, decoders=[], output_type=OUTPUT_ANN, output_fil
             channelnum = decoder_info["pin_mapping"][decoder_id]
             decoder.set_channelnum(decoder_id, channelnum)
 
-        decoder.add_callback(output_type, output_filter, functools.partial(output.output, decoder))
+        decoder.add_callback(
+            output_type, output_filter, functools.partial(output.output, decoder)
+        )
         if next_decoder:
             decoder.add_callback(output_type, output_filter, next_decoder.decode)
         next_decoder = decoder

@@ -1,5 +1,6 @@
 """Super class for output formats that make them look like decoders."""
 
+
 class Output:
     def reset(self):
         pass
@@ -17,7 +18,6 @@ class Output:
                 input_.wait([{"skip": 1000}])
             except EOFError:
                 done = True
-
 
     def stop(self):
         pass

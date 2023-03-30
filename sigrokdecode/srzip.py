@@ -12,15 +12,10 @@ from .input import Input
 
 from . import cond_matches, __version__, OUTPUT_PYTHON
 
-TYPECODE = {
-    1: "B",
-    2: "H",
-    4: "L",
-    5: "Q"
-}
+TYPECODE = {1: "B", 2: "H", 4: "L", 5: "Q"}
 
 UNITS = {
-    "Hz":  1,
+    "Hz": 1,
     "kHz": 1000,
     "KHz": 1000,
     "MHz": 1000000,
@@ -29,9 +24,11 @@ UNITS = {
     "gHz": 1000000000,
 }
 
+
 class SrZipInput(Input):
     name = "srzip"
     desc = "srzip session file format data"
+
     def __init__(self, file: Union[str, PathLike[str], IO[bytes]], initial_state=None):
         super().__init__()
         self.zip = zipfile.ZipFile(file)
@@ -57,7 +54,7 @@ class SrZipInput(Input):
             # check for a suffix with Hz last
             for suffix in reversed(UNITS):
                 if suffix in samplerate:
-                    self.samplerate = int(samplerate[:-len(suffix)]) * UNITS[suffix]
+                    self.samplerate = int(samplerate[: -len(suffix)]) * UNITS[suffix]
                     break
             if self.samplerate is None:
                 self.samplerate = int(samplerate)
@@ -73,7 +70,6 @@ class SrZipInput(Input):
 
         self.bit_mapping = []
         self.one_to_one = True
-
 
         total_logic = int(metadata.get("device 1", "total probes", fallback="0"))
         total_analog = int(metadata.get("device 1", "total analog", fallback="0"))
@@ -105,7 +101,9 @@ class SrZipInput(Input):
             self._analog_file_index = 1
             self._analog_data = []
             for c in range(total_logic + 1, total_logic + 1 + total_analog):
-                self._analog_data.append(self.zip.read(f"analog-1-{c}-{self._analog_file_index}"))
+                self._analog_data.append(
+                    self.zip.read(f"analog-1-{c}-{self._analog_file_index}")
+                )
             self._analog_offset = 0
             self._analog_chunk_len = len(self._analog_data[0]) // 4
 
@@ -118,7 +116,12 @@ class SrZipInput(Input):
             self.samplenum += 1
             if self.single_file:
                 if self.samplenum >= len(self.data):
-                    self.put(self.start_samplenum, self.samplenum, OUTPUT_PYTHON, ["logic", self.last_sample])
+                    self.put(
+                        self.start_samplenum,
+                        self.samplenum,
+                        OUTPUT_PYTHON,
+                        ["logic", self.last_sample],
+                    )
                     raise EOFError()
                 sample = self.data[self.samplenum]
             else:
@@ -128,7 +131,12 @@ class SrZipInput(Input):
                     try:
                         self.data = self.zip.read(f"logic-1-{self._file_index:d}")
                     except KeyError:
-                        self.put(self.start_samplenum, self.samplenum, OUTPUT_PYTHON, ["logic", self.last_sample])
+                        self.put(
+                            self.start_samplenum,
+                            self.samplenum,
+                            OUTPUT_PYTHON,
+                            ["logic", self.last_sample],
+                        )
                         raise EOFError()
 
                     if self.unitsize > 1:
@@ -142,7 +150,7 @@ class SrZipInput(Input):
                 mapped_sample = 0
                 for in_bit, out_bit in self.bit_mapping:
                     if sample & (1 << in_bit) != 0:
-                        mapped_sample |= (1 << out_bit)
+                        mapped_sample |= 1 << out_bit
                 sample = mapped_sample
 
             if self.last_sample is None:
@@ -150,11 +158,21 @@ class SrZipInput(Input):
                 self.start_samplenum = self.samplenum
 
             if self.last_sample != sample:
-                self.put(self.start_samplenum, self.samplenum, OUTPUT_PYTHON, ["logic", self.last_sample])
+                self.put(
+                    self.start_samplenum,
+                    self.samplenum,
+                    OUTPUT_PYTHON,
+                    ["logic", self.last_sample],
+                )
                 self.start_samplenum = self.samplenum
 
             if self.analog_channels:
-                self.put(self.samplenum, self.samplenum + 1, OUTPUT_PYTHON, ["analog"] + self.get_analog_values(self.samplenum))
+                self.put(
+                    self.samplenum,
+                    self.samplenum + 1,
+                    OUTPUT_PYTHON,
+                    ["analog"] + self.get_analog_values(self.samplenum),
+                )
 
             for i, cond in enumerate(conds):
                 if "skip" in cond:
@@ -178,21 +196,35 @@ class SrZipInput(Input):
             total_logic = len(self.logic_channels)
             total_analog = len(self.analog_channels)
             for c in range(total_logic + 1, total_logic + 1 + total_analog):
-                self._analog_data.append(self.zip.read(f"analog-1-{c}-{self._analog_file_index}"))
+                self._analog_data.append(
+                    self.zip.read(f"analog-1-{c}-{self._analog_file_index}")
+                )
             self._analog_chunk_len = len(self._analog_data[0]) // 4
 
         values = []
         for data in self._analog_data:
-            values.append(struct.unpack_from("f", data, (samplenum - self._analog_offset) * 4)[0])
+            values.append(
+                struct.unpack_from("f", data, (samplenum - self._analog_offset) * 4)[0]
+            )
 
         return values
 
+
 CHUNK_SIZE = 4 * 1024 * 1024
+
 
 class SrZipOutput(Output):
     name = "srzip"
     desc = "srzip session file format data"
-    def __init__(self, file: Union[str, PathLike[str], IO[bytes]], driver, logic_channels=[], analog_channels=[], decoders=[]):
+
+    def __init__(
+        self,
+        file: Union[str, PathLike[str], IO[bytes]],
+        driver,
+        logic_channels=[],
+        analog_channels=[],
+        decoders=[],
+    ):
         super().__init__()
         if decoders:
             raise NotImplementedError("Annotations can't be saved into .sr files.")
@@ -233,7 +265,6 @@ class SrZipOutput(Output):
 
         with self.zip.open("metadata", "w") as f:
             metadata.write(io.TextIOWrapper(f))
-
 
     def output(self, source, startsample, endsample, data):
         # Only output data from the input driver.
