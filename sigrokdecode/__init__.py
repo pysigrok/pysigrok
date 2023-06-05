@@ -26,6 +26,8 @@ OUTPUT_META = OutputType.SRD_OUTPUT_META
 class MetadataKeys(Enum):
     SRD_CONF_SAMPLERATE = 1
 
+SRD_CONF_SAMPLERATE = MetadataKeys.SRD_CONF_SAMPLERATE
+
 DataTypeAnn = typing.Tuple[int, typing.List[str]]
 DataTypePython = typing.Any
 DataTypeBinary = typing.Tuple[int, typing.List[bytes]]
@@ -222,7 +224,9 @@ def run_decoders(input_, output, decoders=[], output_type=OUTPUT_ANN, output_fil
     output.reset()
 
     if input_.samplerate > 0:
-        first_decoder.metadata(SRD_CONF_SAMPLERATE, input_.samplerate)
+        for d in all_decoders:
+            if d.metadata:                       
+                d.metadata(SRD_CONF_SAMPLERATE, input_.samplerate)
 
     output.start()
     for d in all_decoders:
