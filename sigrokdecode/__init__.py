@@ -225,7 +225,7 @@ def run_decoders(input_, output, decoders=[], output_type=OUTPUT_ANN, output_fil
 
     if input_.samplerate > 0:
         for d in all_decoders:
-            if d.metadata:                       
+            if d.metadata:
                 d.metadata(SRD_CONF_SAMPLERATE, input_.samplerate)
 
     output.start()
