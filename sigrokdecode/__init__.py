@@ -33,6 +33,8 @@ OUTPUT_BINARY = OutputType.BINARY
 OUTPUT_LOGIC = OutputType.LOGIC
 OUTPUT_META = OutputType.META
 
+SRD_CONF_SAMPLERATE = MetadataKeys.SRD_CONF_SAMPLERATE
+
 DataTypeAnn = typing.Tuple[int, typing.List[str]]
 DataTypePython = typing.Any
 DataTypeBinary = typing.Tuple[int, typing.List[bytes]]
@@ -245,7 +247,9 @@ def run_decoders(
     output.reset()
 
     if input_.samplerate > 0:
-        first_decoder.metadata(SRD_CONF_SAMPLERATE, input_.samplerate)
+        for d in all_decoders:
+            if d.metadata:
+                d.metadata(SRD_CONF_SAMPLERATE, input_.samplerate)
 
     output.start()
     for d in all_decoders:
