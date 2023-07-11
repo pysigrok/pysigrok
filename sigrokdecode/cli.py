@@ -231,7 +231,8 @@ def main(
             unparsed_options = ""
 
         pd_class = decoder_classes[pd_id]
-        # Make sure the protocol decoder has at least one annotation row for all of the annotations.
+        # Make sure the protocol decoder has at least one annotation row for all
+        # of the annotations.
         if not hasattr(pd_class, "annotation_rows") and hasattr(
             pd_class, "annotations"
         ):
