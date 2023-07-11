@@ -110,9 +110,8 @@ class SrZipInput(Input):
     def wait(self, conds=[]):
         if conds is None:
             conds = []
-        self.matched = [False]
+        self.matched = [False] * (len(conds) if conds else 1)
         while not any(self.matched):
-            self.matched = [True] * (len(conds) if conds else 1)
             self.samplenum += 1
             if self.single_file:
                 if self.samplenum >= len(self.data):
@@ -174,10 +173,14 @@ class SrZipInput(Input):
                     ["analog"] + self.get_analog_values(self.samplenum),
                 )
 
+            # Go one sample if no conditions are given.
+            if len(conds) == 0:
+                self.matched[0] = True
+
             for i, cond in enumerate(conds):
                 if "skip" in cond:
                     cond["skip"] -= 1
-                    self.matched[i] = cond["skip"] == 0
+                    self.matched[i] = cond["skip"] <= 0
                     continue
                 self.matched[i] = cond_matches(cond, self.last_sample, sample)
             self.last_sample = sample

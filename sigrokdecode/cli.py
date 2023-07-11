@@ -3,7 +3,8 @@ import pathlib
 from serial.tools import list_ports
 import sys
 
-from . import run_decoders
+from . import run_decoders, OUTPUT_BINARY, OUTPUT_ANN
+from .output import Output
 
 if sys.version_info < (3, 10):
     from importlib_metadata import entry_points
@@ -35,6 +36,23 @@ for decoder in decoders:
     decoder_classes[loaded.id] = loaded
 
 
+class BinaryOutput(Output):
+    def __init__(
+        self,
+        openfile,
+        driver,
+        logic_channels=[],
+        analog_channels=[],
+        decoders=[],
+        *,
+        width="64",
+    ):
+        self.openfile = openfile
+
+    def output(self, source, startsample: int, endsample: int, data):
+        self.openfile.write(data[1])
+
+
 @click.command()
 @click.option("--list-supported", "-L", is_flag=True, default=False)
 @click.option("--list-serial", is_flag=True, default=False)
@@ -44,6 +62,16 @@ for decoder in decoders:
 @click.option("-I", "--input-format", default="srzip")
 @click.option("-o", "--output-file")
 @click.option("-O", "--output-format")
+@click.option(
+    "-B",
+    "--protocol-decoder-binary",
+    help="Output raw binary data from the given decoder (and optional data class)",
+)
+@click.option(
+    "-A",
+    "--protocol-decoder-annotations",
+    help="Only output annotations from the given decoders and classes",
+)
 @click.option("-C", "--channels", help="comma separated list of channels to capture")
 @click.option("-t", "--triggers", help="comma separated list of triggers")
 @click.option("-w", "--wait-trigger", is_flag=True, default=False)
@@ -66,6 +94,8 @@ def main(
     input_format,
     output_file,
     output_format,
+    protocol_decoder_binary,
+    protocol_decoder_annotations,
     channels,
     triggers,
     wait_trigger,
@@ -146,8 +176,14 @@ def main(
             driver.acquire(samples, trigger_dict, not wait_trigger)
 
     elif input_file:
+        input_options = {}
+        if ":" in input_format:
+            input_format, options = input_format.split(":", maxsplit=1)
+            for option in options.split(":"):
+                k, v = option.split("=", maxsplit=1)
+                input_options[k] = v
         input_class = input_classes[input_format]
-        driver = input_class(input_file)
+        driver = input_class(input_file, **input_options)
 
     if output_file:
         # Delete the file if it exists
@@ -157,23 +193,28 @@ def main(
         if not output_format:
             output_format = "srzip"
     else:
-        f = sys.stdout
+        f = sys.stdout.buffer
         if not output_format:
             output_format = "bits:width=64"
     output_options = {}
-    if ":" in output_format:
-        output_split = output_format.split(":")
-        output_format_id = output_split[0]
-        for option in output_split[1:]:
-            if "=" in option:
-                k, v = option.split("=")
-                output_options[k] = v
-            else:
-                output_options[option] = "true"
+    if protocol_decoder_binary:
+        output_class = BinaryOutput
+        output_type = OUTPUT_BINARY
     else:
-        output_format_id = output_format
+        if ":" in output_format:
+            output_split = output_format.split(":")
+            output_format_id = output_split[0]
+            for option in output_split[1:]:
+                if "=" in option:
+                    k, v = option.split("=")
+                    output_options[k] = v
+                else:
+                    output_options[option] = "true"
+        else:
+            output_format_id = output_format
 
-    output_class = output_classes[output_format_id]
+        output_class = output_classes[output_format_id]
+        output_type = OUTPUT_ANN
 
     if not protocol_decoders:
         protocol_decoders = []
@@ -190,6 +231,14 @@ def main(
             unparsed_options = ""
 
         pd_class = decoder_classes[pd_id]
+        # Make sure the protocol decoder has at least one annotation row for all
+        # of the annotations.
+        if not hasattr(pd_class, "annotation_rows") and hasattr(
+            pd_class, "annotations"
+        ):
+            pd_class.annotation_rows = (
+                ("all", "All", tuple(range(len(pd_class.annotations)))),
+            )
         options = {}
         for default_option in pd_class.options:
             options[default_option["id"]] = default_option["default"]
@@ -231,6 +280,17 @@ def main(
             }
         )
 
+    # None is all annotations.
+    annotations = None
+    if protocol_decoder_annotations:
+        annotations = {}
+        for decoder in protocol_decoder_annotations.split(","):
+            if "=" in decoder:
+                decoder, options = decoder.split("=")
+                annotations[decoder] = set(options.split(":"))
+            else:
+                annotations[decoder] = None  # Everything
+
     output = output_class(
         f,
         driver,
@@ -239,4 +299,6 @@ def main(
         decoders=decoders,
         **output_options,
     )
-    run_decoders(driver, output, decoders)
+    run_decoders(
+        driver, output, decoders, output_type=output_type, annotations=annotations
+    )

@@ -33,8 +33,6 @@ OUTPUT_BINARY = OutputType.BINARY
 OUTPUT_LOGIC = OutputType.LOGIC
 OUTPUT_META = OutputType.META
 
-SRD_CONF_SAMPLERATE = MetadataKeys.SRD_CONF_SAMPLERATE
-
 DataTypeAnn = typing.Tuple[int, typing.List[str]]
 DataTypePython = typing.Any
 DataTypeBinary = typing.Tuple[int, typing.List[bytes]]
@@ -97,6 +95,9 @@ class Decoder:
         if output_type not in self.callbacks:
             self.callbacks[output_type] = set()
 
+        if isinstance(output_filter, str):
+            output_filter = set((output_filter,))
+
         self.callbacks[output_type].add((output_filter, fun))
 
     def wait(self, conds=[]):
@@ -136,7 +137,7 @@ class Decoder:
             if output_filter is not None:
                 if output_id == OUTPUT_ANN:
                     annotation = self.annotations[data[0]]
-                    if annotation[0] != output_filter:
+                    if annotation[0] not in output_filter:
                         continue
                 elif output_id == OUTPUT_BINARY:
                     track = self.binary[data[0]]
@@ -213,9 +214,18 @@ def cond_matches(cond, last_sample, current_sample):
 
 
 def run_decoders(
-    input_, output, decoders=[], output_type=OUTPUT_ANN, output_filter=None
+    input_,
+    output,
+    decoders=[],
+    output_type=OUTPUT_ANN,
+    output_filter=None,
+    annotations=None,
 ):
-    input_.add_callback(OUTPUT_PYTHON, None, functools.partial(output.output, input_))
+    # When doing an annotation output, include data from the input file too.
+    if output_type == OUTPUT_ANN:
+        input_.add_callback(
+            OUTPUT_PYTHON, None, functools.partial(output.output, input_)
+        )
 
     all_decoders = []
     next_decoder = None
@@ -229,13 +239,22 @@ def run_decoders(
             channelnum = decoder_info["pin_mapping"][decoder_id]
             decoder.set_channelnum(decoder_id, channelnum)
 
-        decoder.add_callback(
-            output_type, output_filter, functools.partial(output.output, decoder)
-        )
         if next_decoder:
-            decoder.add_callback(output_type, output_filter, next_decoder.decode)
+            decoder.add_callback(OUTPUT_PYTHON, output_filter, next_decoder.decode)
+        if (
+            output_type == OUTPUT_ANN
+            and (annotations is None or decoder_info["id"] in annotations)
+        ) or (output_type == OUTPUT_BINARY and next_decoder is None):
+            if (
+                output_type == OUTPUT_ANN
+                and output_filter is None
+                and decoder_info["id"] in annotations
+            ):
+                output_filter = annotations[decoder_info["id"]]
+            decoder.add_callback(
+                output_type, output_filter, functools.partial(output.output, decoder)
+            )
         next_decoder = decoder
-        output_type = OUTPUT_PYTHON
         output_filter = None
 
     if all_decoders:
