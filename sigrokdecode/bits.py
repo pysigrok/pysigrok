@@ -2,6 +2,7 @@ from .output import Output
 
 import io
 
+
 class BitsOutput(Output):
     name = "bits"
     desc = "ASCII rendering with 0/1"
@@ -38,7 +39,10 @@ class BitsOutput(Output):
             for s in range(startsample, endsample):
                 if s % self.width == 0:
                     if s > 1:
-                        print("\n".join(("".join(line) for line in self.lines)), file=self.openfile)
+                        print(
+                            "\n".join(("".join(line) for line in self.lines)),
+                            file=self.openfile,
+                        )
                     self.lines = [[c, ":"] for c in self.logic_channels]
                 for bit in range(len(self.logic_channels)):
                     self.lines[bit].append(values[bit])
@@ -50,7 +54,7 @@ class BitsOutput(Output):
             pass
         else:
             # annotation
-            if data[1] is not None: 
+            if data[1] is not None:
                 print(data[1][0], file=self.openfile)
             pass
 

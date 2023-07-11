@@ -35,6 +35,7 @@ for decoder in decoders:
     loaded = decoder.load()
     decoder_classes[loaded.id] = loaded
 
+
 class BinaryOutput(Output):
     def __init__(
         self,
@@ -51,6 +52,7 @@ class BinaryOutput(Output):
     def output(self, source, startsample: int, endsample: int, data):
         self.openfile.write(data[1])
 
+
 @click.command()
 @click.option("--list-supported", "-L", is_flag=True, default=False)
 @click.option("--list-serial", is_flag=True, default=False)
@@ -60,8 +62,16 @@ class BinaryOutput(Output):
 @click.option("-I", "--input-format", default="srzip")
 @click.option("-o", "--output-file")
 @click.option("-O", "--output-format")
-@click.option("-B", "--protocol-decoder-binary", help="Output raw binary data from the given decoder (and optional data class)")
-@click.option("-A", "--protocol-decoder-annotations", help="Only output annotations from the given decoders and classes")
+@click.option(
+    "-B",
+    "--protocol-decoder-binary",
+    help="Output raw binary data from the given decoder (and optional data class)",
+)
+@click.option(
+    "-A",
+    "--protocol-decoder-annotations",
+    help="Only output annotations from the given decoders and classes",
+)
 @click.option("-C", "--channels", help="comma separated list of channels to capture")
 @click.option("-t", "--triggers", help="comma separated list of triggers")
 @click.option("-w", "--wait-trigger", is_flag=True, default=False)
@@ -222,8 +232,12 @@ def main(
 
         pd_class = decoder_classes[pd_id]
         # Make sure the protocol decoder has at least one annotation row for all of the annotations.
-        if not hasattr(pd_class, "annotation_rows") and hasattr(pd_class, "annotations"):
-            pd_class.annotation_rows = (("all", "All", tuple(range(len(pd_class.annotations)))),)
+        if not hasattr(pd_class, "annotation_rows") and hasattr(
+            pd_class, "annotations"
+        ):
+            pd_class.annotation_rows = (
+                ("all", "All", tuple(range(len(pd_class.annotations)))),
+            )
         options = {}
         for default_option in pd_class.options:
             options[default_option["id"]] = default_option["default"]
@@ -274,8 +288,7 @@ def main(
                 decoder, options = decoder.split("=")
                 annotations[decoder] = set(options.split(":"))
             else:
-                annotations[decoder] = None # Everything
-
+                annotations[decoder] = None  # Everything
 
     output = output_class(
         f,
@@ -285,4 +298,6 @@ def main(
         decoders=decoders,
         **output_options,
     )
-    run_decoders(driver, output, decoders, output_type=output_type, annotations=annotations)
+    run_decoders(
+        driver, output, decoders, output_type=output_type, annotations=annotations
+    )

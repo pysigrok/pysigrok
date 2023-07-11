@@ -214,11 +214,18 @@ def cond_matches(cond, last_sample, current_sample):
 
 
 def run_decoders(
-    input_, output, decoders=[], output_type=OUTPUT_ANN, output_filter=None, annotations=None
+    input_,
+    output,
+    decoders=[],
+    output_type=OUTPUT_ANN,
+    output_filter=None,
+    annotations=None,
 ):
     # When doing an annotation output, include data from the input file too.
     if output_type == OUTPUT_ANN:
-        input_.add_callback(OUTPUT_PYTHON, None, functools.partial(output.output, input_))
+        input_.add_callback(
+            OUTPUT_PYTHON, None, functools.partial(output.output, input_)
+        )
 
     all_decoders = []
     next_decoder = None
@@ -234,8 +241,15 @@ def run_decoders(
 
         if next_decoder:
             decoder.add_callback(OUTPUT_PYTHON, output_filter, next_decoder.decode)
-        if (output_type == OUTPUT_ANN and (annotations is None or decoder_info["id"] in annotations)) or (output_type == OUTPUT_BINARY and next_decoder is None):
-            if output_type == OUTPUT_ANN and output_filter is None and decoder_info["id"] in annotations:
+        if (
+            output_type == OUTPUT_ANN
+            and (annotations is None or decoder_info["id"] in annotations)
+        ) or (output_type == OUTPUT_BINARY and next_decoder is None):
+            if (
+                output_type == OUTPUT_ANN
+                and output_filter is None
+                and decoder_info["id"] in annotations
+            ):
                 output_filter = annotations[decoder_info["id"]]
             decoder.add_callback(
                 output_type, output_filter, functools.partial(output.output, decoder)
